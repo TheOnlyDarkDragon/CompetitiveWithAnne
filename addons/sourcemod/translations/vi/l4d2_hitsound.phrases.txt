@@ -136,6 +136,18 @@
 	{
 		"vi"		"Chế độ phát âm thanh: buộc gộp (tối đa một âm mỗi khung hình, ưu tiên hạ gục > headshot > trúng)"
 	}
+	"L4D2Hitsound_LethalModeFollow"
+	{
+		"vi"		"Âm trúng đích ở phát kết liễu: theo bộ âm (chỉ bộ có lethal_hit=1 mới phát thêm âm trúng đích ở phát kết liễu)"
+	}
+	"L4D2Hitsound_LethalModeOn"
+	{
+		"vi"		"Âm trúng đích ở phát kết liễu: buộc bật (phát kết liễu vang cả âm trúng/headshot lẫn âm hạ gục; cần chế độ chồng âm)"
+	}
+	"L4D2Hitsound_LethalModeOff"
+	{
+		"vi"		"Âm trúng đích ở phát kết liễu: buộc tắt (phát kết liễu chỉ vang âm hạ gục)"
+	}
 	"L4D2Hitsound_SetPlaybackPreset"
 	{
 		"vi"		"[Hitsound] Đã áp dụng phạm vi âm thanh của bộ này."

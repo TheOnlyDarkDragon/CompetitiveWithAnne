@@ -17,10 +17,11 @@
  * 音效套装可选定制键：
  *   "headshot_kill"  爆头击杀专用音；留空/缺省 = 沿用 headshot 音
  *   "stack"          1/缺省 = 每个事件立即播放；0 = 同帧合并为一条（击杀>爆头>命中）
+ *   "lethal_hit"     1 = 致死那一发仍补播命中/爆头音（可叠出「叮+钟」）；0/缺省 = 只由死亡事件播一声
  *   "apply_special_only"  选中该套装时写入「仅特感」开关（0/1）；缺省 = 不改
  *
  * 四个音效字段：正数=兼容来源套装ID，负数=公共音效ID，0=关闭；爆头击杀0=跟随普通爆头音。
- * 致死那发只由死亡事件播一声。hurt 不再为超杀补播。
+ * 致死那发默认只由死亡事件播一声；套装 lethal_hit=1 或玩家选「强制补播」时 hurt 会补播命中/爆头音。
  * 播放一律 SNDCHAN_AUTO；能发就发，被引擎掐断也无所谓。
  *
  * 重要编号约定：
@@ -29,8 +30,9 @@
  *
  * SQL 字段由外部手动维护，表名默认 ConVar: sm_hitsound_db_table = RPG；四个音效列必须为有符号整数。
  * RPG 表需包含：hitsound_head/hit/kill、hiticon_head/hit/kill、
- * hitsound_si_only、hiticon_si_only、hitsound_stack_mode、hitsound_headkill。
- * 缺少最后两列时执行 database/migrations/20260820_hitsound_personal_prefs.sql。
+ * hitsound_si_only、hiticon_si_only、hitsound_stack_mode、hitsound_headkill、hitsound_lethal_mode。
+ * 缺少 hitsound_stack_mode/hitsound_headkill 时执行 database/migrations/20260820_hitsound_personal_prefs.sql。
+ * 缺少 hitsound_lethal_mode 时执行 database/migrations/20260907_hitsound_lethal_mode.sql。
  * 四个音效列为 unsigned 时执行 database/migrations/20260823_hitsound_sound_catalog.sql。
  *
  * commands:
@@ -45,7 +47,7 @@
 #include <sdkhooks>
 #include <adminmenu>
 
-#define PLUGIN_VERSION "2.8.0"
+#define PLUGIN_VERSION "2.9.0"
 #define CVAR_FLAGS     FCVAR_NONE
 #define IsValidClient(%1) (1 <= %1 && %1 <= MaxClients && IsClientInGame(%1))
 #define OVERLAY_CLEAN_INTERVAL 0.1
@@ -111,6 +113,8 @@ bool g_IcSpecialOnly [MAXPLAYERS + 1] = { false, ... };
 
 // 0=跟随声音来源 stack；1=强制叠加；2=强制合并
 int  g_SndStackMode [MAXPLAYERS + 1] = { 0, ... };
+// 0=跟随套装 lethal_hit；1=强制补播致死帧命中音；2=强制不补播
+int  g_SndLethalMode[MAXPLAYERS + 1] = { 0, ... };
 bool g_PrefsLoaded[MAXPLAYERS + 1] = { false, ... };
 bool g_PrefsDirty [MAXPLAYERS + 1] = { false, ... };
 bool g_DBLoadInFlight[MAXPLAYERS + 1] = { false, ... };
@@ -145,6 +149,7 @@ Handle g_SetHit      = INVALID_HANDLE;
 Handle g_SetKill     = INVALID_HANDLE;
 Handle g_SetHeadKill = INVALID_HANDLE; // 爆头击杀专用音（可选；空 = 回退 headshot）
 Handle g_SetStack    = INVALID_HANDLE; // 1 = 逐事件立即播放（不做同帧合并去重；缺省 1）
+Handle g_SetLethalHit = INVALID_HANDLE; // 1 = 致死帧仍补播命中/爆头音（缺省 0）
 Handle g_SetApplySpecialOnly = INVALID_HANDLE; // -1=不套用；0/1
 int    g_SetCount    = 0; // 套装总数（音效），套装ID有效范围：1..g_SetCount
 
@@ -512,6 +517,21 @@ static bool ShouldStackFeedback(int client, int choice)
     return IsStackSource(choice);
 }
 
+// 致死帧是否补播命中/爆头音。公共音效库没有这个属性，一律按「不补播」处理，
+// 想让单选音效也补播只能用玩家侧的「强制补播」。
+static bool IsLethalHitSource(int choice)
+{
+    if (choice <= 0 || choice > g_SetCount) return false;
+    return GetArrayCell(g_SetLethalHit, choice - 1) != 0;
+}
+
+static bool AllowLethalHitSound(int client, int choice)
+{
+    if (g_SndLethalMode[client] == 1) return true;
+    if (g_SndLethalMode[client] == 2) return false;
+    return IsLethalHitSource(choice);
+}
+
 static int ParseOptionalPrefInt(const char[] s, int minVal, int maxVal)
 {
     if (s[0] == '\0') return -1;
@@ -728,6 +748,7 @@ public void OnPluginStart()
     g_SetKill     = CreateArray(PLATFORM_MAX_PATH);
     g_SetHeadKill = CreateArray(PLATFORM_MAX_PATH);
     g_SetStack    = CreateArray(1);
+    g_SetLethalHit = CreateArray(1);
     g_SetApplySpecialOnly = CreateArray(1);
 
     g_SoundIds     = CreateArray(1);
@@ -838,6 +859,7 @@ void LoadHitSoundSets()
     ClearArray(g_SetKill);
     ClearArray(g_SetHeadKill);
     ClearArray(g_SetStack);
+    ClearArray(g_SetLethalHit);
     ClearArray(g_SetApplySpecialOnly);
     g_SetCount = 0;
 
@@ -859,6 +881,7 @@ void LoadHitSoundSets()
             char applySpecial[8];
             int  isbuiltin = 0;
             int  stack = 0;
+            int  lethalHit = 0;
 
             KvGetSectionName(kv, section, sizeof(section));
             int setId = StringToInt(section);
@@ -876,9 +899,10 @@ void LoadHitSoundSets()
             KvGetString(kv, "headshot_kill", hk, sizeof(hk), "");
             isbuiltin = KvGetNum(kv, "builtin", 0);
             stack     = KvGetNum(kv, "stack", 1); // 缺省叠加播放；显式 "stack 0" 才启用同帧合并
+            lethalHit = KvGetNum(kv, "lethal_hit", 0); // 缺省致死帧只响一声；显式 "lethal_hit 1" 才补播命中音
             KvGetString(kv, "apply_special_only", applySpecial, sizeof(applySpecial), "");
-            DBG("SoundSet #%d '%s' builtin=%d stack=%d hs='%s' hit='%s' kill='%s' hskill='%s'",
-                g_SetCount+1, name, isbuiltin, stack, sh, hi, ki, hk);
+            DBG("SoundSet #%d '%s' builtin=%d stack=%d lethal=%d hs='%s' hit='%s' kill='%s' hskill='%s'",
+                g_SetCount+1, name, isbuiltin, stack, lethalHit, sh, hi, ki, hk);
 
             PushArrayString(g_SetNames, name);
             PushArrayString(g_SetHeadshot, sh);
@@ -886,6 +910,7 @@ void LoadHitSoundSets()
             PushArrayString(g_SetKill, ki);
             PushArrayString(g_SetHeadKill, hk);
             PushArrayCell(g_SetStack, stack != 0 ? 1 : 0);
+            PushArrayCell(g_SetLethalHit, lethalHit != 0 ? 1 : 0);
             PushArrayCell(g_SetApplySpecialOnly, ParseOptionalPrefInt(applySpecial, 0, 1));
             g_SetCount++;
 
@@ -1139,6 +1164,7 @@ public void OnClientPutInServer(int client)
     g_SndSpecialOnly[client] = false;
     g_IcSpecialOnly [client] = false;
     g_SndStackMode [client] = 0;
+    g_SndLethalMode[client] = 0;
     g_HasLegacyHeadKillPref[client] = false;
     KV_LoadExtraPrefs(client);
 
@@ -1266,7 +1292,7 @@ public void DB_RequestLoadPlayer(int client, const char[] sid)
            hitsound_head, hitsound_hit, hitsound_kill, \
            hiticon_head,  hiticon_hit,  hiticon_kill, \
            hitsound_si_only, hiticon_si_only, \
-           hitsound_stack_mode, hitsound_headkill \
+           hitsound_stack_mode, hitsound_headkill, hitsound_lethal_mode \
          FROM `%!s` \
          WHERE steamid='%s' \
          LIMIT 1;",
@@ -1366,7 +1392,9 @@ public void SQL_OnLoadPrefs(Handle owner, Handle hndl, const char[] error, any d
         int ic_si_only  = SafeFetchInt(hndl, 7);
         bool migrateStackMode = SQL_IsFieldNull(hndl, 8);
         bool migrateHeadKill = SQL_IsFieldNull(hndl, 9);
+        bool migrateLethalMode = SQL_IsFieldNull(hndl, 10);
         int stackMode = migrateStackMode ? g_SndStackMode[client] : SafeFetchInt(hndl, 8);
+        int lethalMode = migrateLethalMode ? g_SndLethalMode[client] : SafeFetchInt(hndl, 10);
         int headKillSet;
         if (!migrateHeadKill)
         {
@@ -1382,6 +1410,7 @@ public void SQL_OnLoadPrefs(Handle owner, Handle hndl, const char[] error, any d
             headKillSet = SoundSetHasConfiguredPath(hs_head, SOUND_CHOICE_HEADSHOT_KILL) ? hs_head : 0;
         }
         if (stackMode < 0 || stackMode > 2) stackMode = 0;
+        if (lethalMode < 0 || lethalMode > 2) lethalMode = 0;
         ClampSoundChoice(headKillSet);
 
         ClampSoundChoice(hs_head); ClampSoundChoice(hs_hit); ClampSoundChoice(hs_kill);
@@ -1398,6 +1427,7 @@ public void SQL_OnLoadPrefs(Handle owner, Handle hndl, const char[] error, any d
         g_SndSpecialOnly[client] = (snd_si_only != 0);
         g_IcSpecialOnly [client] = (ic_si_only != 0);
         g_SndStackMode [client] = stackMode;
+        g_SndLethalMode[client] = lethalMode;
         g_SndHeadKill[client] = headKillSet;
 
         bool normalized = NormalizePlayerSelections(client);
@@ -1412,7 +1442,7 @@ public void SQL_OnLoadPrefs(Handle owner, Handle hndl, const char[] error, any d
         KV_SavePlayer(client);
 
         // NULL 表示列刚迁移：保留旧 KV 偏好并回写数据库。
-        if (migrateStackMode || migrateHeadKill || normalized)
+        if (migrateStackMode || migrateHeadKill || migrateLethalMode || normalized)
         {
             g_PrefsDirty[client] = true;
             g_DBSavePending[client] = true;
@@ -1464,6 +1494,7 @@ void DB_SavePlayerPrefs(int client)
     int snd_si_only = g_SndSpecialOnly[client] ? 1 : 0;
     int ic_si_only  = g_IcSpecialOnly [client] ? 1 : 0;
     int stack_mode  = g_SndStackMode [client];
+    int lethal_mode = g_SndLethalMode[client];
     int headkill_set = g_SndHeadKill[client];
 
     char q[1536];
@@ -1472,9 +1503,9 @@ void DB_SavePlayerPrefs(int client)
             steamid, hitsound_head, hitsound_hit, hitsound_kill, \
             hiticon_head, hiticon_hit, hiticon_kill, \
             hitsound_si_only, hiticon_si_only, \
-            hitsound_stack_mode, hitsound_headkill \
+            hitsound_stack_mode, hitsound_headkill, hitsound_lethal_mode \
         ) \
-        VALUES ('%s', %d, %d, %d, %d, %d, %d, %d, %d, %d, %d) \
+        VALUES ('%s', %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d) \
         ON DUPLICATE KEY UPDATE \
             hitsound_head=VALUES(hitsound_head), \
             hitsound_hit =VALUES(hitsound_hit), \
@@ -1485,9 +1516,10 @@ void DB_SavePlayerPrefs(int client)
             hitsound_si_only=VALUES(hitsound_si_only), \
             hiticon_si_only =VALUES(hiticon_si_only), \
             hitsound_stack_mode=VALUES(hitsound_stack_mode), \
-            hitsound_headkill=VALUES(hitsound_headkill);",
+            hitsound_headkill=VALUES(hitsound_headkill), \
+            hitsound_lethal_mode=VALUES(hitsound_lethal_mode);",
         table, sid, hs_head, hs_hit, hs_kill, ic_head, ic_hit, ic_kill,
-        snd_si_only, ic_si_only, stack_mode, headkill_set);
+        snd_si_only, ic_si_only, stack_mode, headkill_set, lethal_mode);
 
     DataPack pack = new DataPack();
     pack.WriteCell(GetClientUserId(client));
@@ -1560,6 +1592,7 @@ void KV_SavePlayer(int client)
     KvSetNum(g_SoundStore, "SndSpecialOnly", g_SndSpecialOnly[client] ? 1 : 0);
     KvSetNum(g_SoundStore, "IcSpecialOnly",  g_IcSpecialOnly [client] ? 1 : 0);
     KvSetNum(g_SoundStore, "SndStackMode", g_SndStackMode[client]);
+    KvSetNum(g_SoundStore, "SndLethalMode", g_SndLethalMode[client]);
     KvSetNum(g_SoundStore, "SndHeadKillSet", g_SndHeadKill[client]);
     KvSetNum(g_SoundStore, "SndHeadKill", g_SndHeadKill[client] != 0 ? 1 : 0); // 兼容旧版回滚
 
@@ -1593,6 +1626,10 @@ void KV_LoadExtraPrefs(int client)
         int mode = KvGetNum(g_SoundStore, "SndStackMode", 0);
         if (mode < 0 || mode > 2) mode = 0;
         g_SndStackMode[client] = mode;
+
+        int lethalModeKv = KvGetNum(g_SoundStore, "SndLethalMode", 0);
+        if (lethalModeKv < 0 || lethalModeKv > 2) lethalModeKv = 0;
+        g_SndLethalMode[client] = lethalModeKv;
 
         int headKillSet = KvGetNum(g_SoundStore, "SndHeadKillSet", PREF_VALUE_MISSING);
         if (headKillSet != PREF_VALUE_MISSING)
@@ -1668,6 +1705,10 @@ void KV_LoadPlayer(int client)
     int stackMode = KvGetNum(g_SoundStore, "SndStackMode", 0);
     if (stackMode < 0 || stackMode > 2) stackMode = 0;
     g_SndStackMode[client] = stackMode;
+
+    int lethalMode = KvGetNum(g_SoundStore, "SndLethalMode", 0);
+    if (lethalMode < 0 || lethalMode > 2) lethalMode = 0;
+    g_SndLethalMode[client] = lethalMode;
 
     int headKillSet = KvGetNum(g_SoundStore, "SndHeadKillSet", PREF_VALUE_MISSING);
     if (headKillSet == PREF_VALUE_MISSING)
@@ -1785,19 +1826,23 @@ public Action Event_PlayerHurt(Handle event, const char[] name, bool dontBroadca
         && GetClientTeam(attacker) == 2 && GetClientTeam(victim) == 3)
     {
         bool specialTarget = IsSpecialInfectedClient(victim);
+        // wasDead：本帧之前就已「死亡/濒死」（例如倒地的 Tank），任何情况都不给反馈。
+        // lethalNow：本帧才致死的那一发，是否补播命中音由 AllowLethalHitSound 决定。
+        bool wasDead = g_IsVictimDeadPlayer[victim];
         if (health <= 0)
             g_IsVictimDeadPlayer[victim] = true;
+        bool lethalNow = (!wasDead && health <= 0);
 
-        if (!g_IsVictimDeadPlayer[victim])
+        if (!wasDead)
         {
             // 图标：爆头/命中（致死帧走击杀覆盖图）
-            if (GetConVarInt(cv_pic_enable) == 1 && ShouldShowIconFeedback(attacker, specialTarget))
+            if (!lethalNow && GetConVarInt(cv_pic_enable) == 1 && ShouldShowIconFeedback(attacker, specialTarget))
             {
                 int setId = headshot ? g_IcHead[attacker] : g_IcHit[attacker];
                 if (setId > 0) ShowOverlayBySet(attacker, setId, headshot ? 0 : 1);
             }
 
-            // 音效：爆头/命中。致死由死亡事件播一声；火/燃烧弹过滤保持不变
+            // 音效：爆头/命中。致死帧默认让死亡事件播一声；火/燃烧弹过滤保持不变
             if (GetConVarInt(cv_sound_enable) == 1 && ShouldPlaySoundFeedback(attacker, specialTarget))
             {
                 char weapon[64];
@@ -1806,7 +1851,8 @@ public Action Event_PlayerHurt(Handle event, const char[] name, bool dontBroadca
                 {
                     char s2[PLATFORM_MAX_PATH];
                     int choice = headshot ? g_SndHead[attacker] : g_SndHit[attacker];
-                    if (choice != 0 && GetSoundPathByChoice(choice, headshot ? SOUND_CHOICE_HEADSHOT : SOUND_CHOICE_HIT, s2, sizeof(s2)))
+                    if (choice != 0 && (!lethalNow || AllowLethalHitSound(attacker, choice))
+                        && GetSoundPathByChoice(choice, headshot ? SOUND_CHOICE_HEADSHOT : SOUND_CHOICE_HIT, s2, sizeof(s2)))
                         QueueSoundFeedback(attacker, choice, s2, headshot ? SOUND_FEEDBACK_HEADSHOT : SOUND_FEEDBACK_HIT);
                 }
             }
@@ -1874,23 +1920,21 @@ public Action Event_InfectedHurt(Handle event, const char[] name, bool dontBroad
         // infected_hurt 是扣血前事件，必须用本次伤害推算致死帧。
         bool dead = (hp - amount <= 0);
 
-        if (!dead)
+        // 图标：爆头/命中（致死帧走击杀覆盖图）
+        if (!dead && GetConVarInt(cv_pic_enable) == 1 && ShouldShowIconFeedback(attacker, specialTarget))
         {
-            // 图标：爆头/命中
-            if (GetConVarInt(cv_pic_enable) == 1 && ShouldShowIconFeedback(attacker, specialTarget))
-            {
-                int setId = headshot ? g_IcHead[attacker] : g_IcHit[attacker];
-                if (setId > 0) ShowOverlayBySet(attacker, setId, headshot ? 0 : 1);
-            }
+            int setId = headshot ? g_IcHead[attacker] : g_IcHit[attacker];
+            if (setId > 0) ShowOverlayBySet(attacker, setId, headshot ? 0 : 1);
+        }
 
-            // 音效：爆头/命中。致死由死亡事件播一声
-            if (GetConVarInt(cv_sound_enable) == 1 && ShouldPlaySoundFeedback(attacker, specialTarget))
-            {
-                char s2[PLATFORM_MAX_PATH];
-                int choice = headshot ? g_SndHead[attacker] : g_SndHit[attacker];
-                if (choice != 0 && GetSoundPathByChoice(choice, headshot ? SOUND_CHOICE_HEADSHOT : SOUND_CHOICE_HIT, s2, sizeof(s2)))
-                    QueueSoundFeedback(attacker, choice, s2, headshot ? SOUND_FEEDBACK_HEADSHOT : SOUND_FEEDBACK_HIT);
-            }
+        // 音效：爆头/命中。致死帧默认让死亡事件播一声
+        if (GetConVarInt(cv_sound_enable) == 1 && ShouldPlaySoundFeedback(attacker, specialTarget))
+        {
+            char s2[PLATFORM_MAX_PATH];
+            int choice = headshot ? g_SndHead[attacker] : g_SndHit[attacker];
+            if (choice != 0 && (!dead || AllowLethalHitSound(attacker, choice))
+                && GetSoundPathByChoice(choice, headshot ? SOUND_CHOICE_HEADSHOT : SOUND_CHOICE_HIT, s2, sizeof(s2)))
+                QueueSoundFeedback(attacker, choice, s2, headshot ? SOUND_FEEDBACK_HEADSHOT : SOUND_FEEDBACK_HIT);
         }
     }
     return Plugin_Changed;
@@ -2147,6 +2191,14 @@ public Action Cmd_MenuMain(int client, int args)
     else                                  strcopy(modeName, sizeof(modeName), "跟随声音");
     Format(stackLabel, sizeof(stackLabel), "音效播放模式：%s（点击切换）", modeName);
     AddMenuItem(menu, "snd_stack_mode", stackLabel);
+
+    char lethalLabel[160];
+    char lethalName[16];
+    if (g_SndLethalMode[client] == 1)      strcopy(lethalName, sizeof(lethalName), "强制补播");
+    else if (g_SndLethalMode[client] == 2) strcopy(lethalName, sizeof(lethalName), "强制不补播");
+    else                                   strcopy(lethalName, sizeof(lethalName), "跟随套装");
+    Format(lethalLabel, sizeof(lethalLabel), "致死帧命中音：%s（点击切换）", lethalName);
+    AddMenuItem(menu, "snd_lethal_mode", lethalLabel);
     AddMenuItem(menu, "snd_special_only", g_SndSpecialOnly[client] ? "音效范围：仅特感/Tank" : "音效范围：全部感染者");
     AddMenuItem(menu, "ico_special_only", g_IcSpecialOnly [client] ? "图标范围：仅特感/Tank" : "图标范围：全部感染者");
 
@@ -2199,6 +2251,19 @@ public int MenuHandler_Main(Handle menu, MenuAction action, int client, int item
                 case 1:  PrintToChat(client, "%t", "L4D2Hitsound_StackModeStack");
                 case 2:  PrintToChat(client, "%t", "L4D2Hitsound_StackModeMerge");
                 default: PrintToChat(client, "%t", "L4D2Hitsound_StackModeFollow");
+            }
+            MarkDirtyAndSave(client);
+            Cmd_MenuMain(client, 0);
+            return 0;
+        }
+        if (StrEqual(info, "snd_lethal_mode"))
+        {
+            g_SndLethalMode[client] = (g_SndLethalMode[client] + 1) % 3;
+            switch (g_SndLethalMode[client])
+            {
+                case 1:  PrintToChat(client, "%t", "L4D2Hitsound_LethalModeOn");
+                case 2:  PrintToChat(client, "%t", "L4D2Hitsound_LethalModeOff");
+                default: PrintToChat(client, "%t", "L4D2Hitsound_LethalModeFollow");
             }
             MarkDirtyAndSave(client);
             Cmd_MenuMain(client, 0);

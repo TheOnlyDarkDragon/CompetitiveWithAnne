@@ -136,6 +136,18 @@
 	{
 		"en"		"Sound playback mode: force merging (at most one sound per frame, priority kill > headshot > hit)"
 	}
+	"L4D2Hitsound_LethalModeFollow"
+	{
+		"en"		"Lethal-frame hit sound: follow the sound set (only sets with lethal_hit=1 also ring the hit sound on the killing shot)"
+	}
+	"L4D2Hitsound_LethalModeOn"
+	{
+		"en"		"Lethal-frame hit sound: force on (the killing shot rings the hit/headshot sound and the kill sound together; needs stacking mode)"
+	}
+	"L4D2Hitsound_LethalModeOff"
+	{
+		"en"		"Lethal-frame hit sound: force off (the killing shot rings the kill sound only)"
+	}
 	"L4D2Hitsound_SetPlaybackPreset"
 	{
 		"en"		"[Hitsound] Applied this set's sound range."

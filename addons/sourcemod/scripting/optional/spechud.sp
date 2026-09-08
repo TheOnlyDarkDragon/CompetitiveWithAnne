@@ -20,7 +20,7 @@
 #include <lerpmonitor>
 #include <witch_and_tankifier>
 
-#define PLUGIN_VERSION "3.10.1"
+#define PLUGIN_VERSION "3.10.2"
 
 public Plugin myinfo =
 {
@@ -515,6 +515,9 @@ Action HudDrawTimer(Handle hTimer)
 {
 	if (IsInReady() || IsInPause())
 		return Plugin_Continue;
+
+	// Modes with ReadyUp disabled never fire OnRoundIsLive to refresh the name.
+	FillReadyConfig();
 
 	int tankHud_total = 0;
 	int[] tankHud_clients = new int[MaxClients];

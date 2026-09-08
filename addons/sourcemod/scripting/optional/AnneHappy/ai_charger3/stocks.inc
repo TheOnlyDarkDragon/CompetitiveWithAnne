@@ -483,6 +483,152 @@ stock int getLegacyMeleeDamage() {
 }
 
 /**
+* 近战僵持黑名单: 记录 Charger 主动放弃过的目标
+* 没有这个黑名单时, 换目标之后 L4D2_OnChooseVictim 会按距离立刻把同一个近战玩家选回来 (他往往就是最近的那个)
+* @param client Charger 客户端索引
+* @param target 被放弃的目标索引
+* @return void
+**/
+stock void blacklistBaitTarget(int client, int target) {
+    if (client < 1 || client > MaxClients || target < 1 || target > MaxClients)
+        return;
+
+    static float dur;
+    dur = g_cvMeleeBaitBlacklistDur != null ? g_cvMeleeBaitBlacklistDur.FloatValue : 0.0;
+    if (dur <= 0.0)
+        return;
+
+    g_flBaitTargetBlacklist[client][target] = GetGameTime() + dur;
+}
+
+/**
+* 目标当前是否处于该 Charger 的近战僵持黑名单中
+**/
+stock bool isBaitTargetBlacklisted(int client, int target) {
+    if (client < 1 || client > MaxClients || target < 1 || target > MaxClients)
+        return false;
+
+    return g_flBaitTargetBlacklist[client][target] > GetGameTime();
+}
+
+/**
+* 清空某个 Charger 的黑名单 (重新生成 / 换人时调用)
+**/
+stock void clearBaitTargetBlacklist(int client) {
+    if (client < 1 || client > MaxClients)
+        return;
+
+    for (int i = 0; i <= MaxClients; i++)
+        g_flBaitTargetBlacklist[client][i] = 0.0;
+}
+
+/**
+* 请求把 Charger 的目标换成 newTarget
+* 引擎侧的受害者由 L4D2_OnChooseVictim 决定, 这里只登记强制目标, 等下一次 OnChooseVictim 落实
+* 同时立刻改写插件自己的 m_iTarget 并让当前路径失效, 避免状态机还在朝旧目标做决策
+* @param client Charger 客户端索引
+* @param newTarget 新目标索引
+* @return void
+**/
+stock void requestChargerTargetSwitch(int client, int newTarget) {
+    if (!isAiCharger(client) || !IsValidSurvivor(newTarget) || !IsPlayerAlive(newTarget))
+        return;
+
+    g_iChargerForcedTarget[client] = GetClientUserId(newTarget);
+    g_flChargerForcedTargetUntil[client] = GetGameTime() + CHARGER_FORCED_TARGET_TTL;
+    g_AiChargers[client].m_iTarget = GetClientUserId(newTarget);
+    g_AiChargers[client].m_bPathInvalidatePending = true;
+}
+
+/**
+* 取得当前有效的强制目标, 过期或目标失效时自动清除
+* @return int, 无效时返回 -1
+**/
+stock int getChargerForcedTarget(int client) {
+    if (client < 1 || client > MaxClients || g_iChargerForcedTarget[client] <= 0)
+        return -1;
+
+    if (GetGameTime() > g_flChargerForcedTargetUntil[client]) {
+        clearChargerForcedTarget(client);
+        return -1;
+    }
+
+    static int target;
+    target = GetClientOfUserId(g_iChargerForcedTarget[client]);
+    if (!IsValidSurvivor(target) || !IsPlayerAlive(target)) {
+        clearChargerForcedTarget(client);
+        return -1;
+    }
+
+    return target;
+}
+
+stock void clearChargerForcedTarget(int client) {
+    if (client < 1 || client > MaxClients)
+        return;
+
+    g_iChargerForcedTarget[client] = 0;
+    g_flChargerForcedTargetUntil[client] = 0.0;
+}
+
+/**
+* 近战僵持无解时, 挑一个更值得打的生还者
+* 优先挑当前就能直接冲的 (高度可达 + 冲锋路径不被挡), 没有就退而求其次挑最近的非近战目标, 让 Approach 正常走过去
+* @param client Charger 客户端索引
+* @param curTarget 当前目标索引
+* @return int, 没有合适目标时返回 -1
+**/
+stock int findMeleeStalemateSwitchTarget(int client, int curTarget) {
+    if (!isAiCharger(client))
+        return -1;
+
+    static float pos[3], candidatePos[3], dist;
+    GetClientAbsOrigin(client, pos);
+
+    static int bestChargeable, bestFallback;
+    static float bestChargeableDist, bestFallbackDist;
+    bestChargeable = -1;
+    bestFallback = -1;
+    bestChargeableDist = 999999.0;
+    bestFallbackDist = 999999.0;
+
+    static float maxDist;
+    maxDist = g_fLegacyExtraTargetMax > 0.0 ? g_fLegacyExtraTargetMax : DEFAULT_STALEMATE_SWITCH_DIST;
+
+    for (int i = 1; i <= MaxClients; i++) {
+        if (i == curTarget || !IsValidSurvivor(i) || !IsPlayerAlive(i))
+            continue;
+        if (IsClientIncapped(i) || IsClientHanging(i) || IsClientPinned(i))
+            continue;
+        if (isBaitTargetBlacklisted(client, i))
+            continue;
+        // 换到另一个拿近战的人身上只是把同一个僵局换个地方重演
+        if (getTargetThreatType(client, i) == Threat_Melee)
+            continue;
+
+        GetClientAbsOrigin(i, candidatePos);
+        dist = getVectorDistance2D(pos, candidatePos);
+        if (dist > maxDist)
+            continue;
+
+        if (dist < bestFallbackDist) {
+            bestFallbackDist = dist;
+            bestFallback = i;
+        }
+
+        if (!isChargeTargetHeightReachable(client, i) || isChargePathBlocked(client, i))
+            continue;
+
+        if (dist < bestChargeableDist) {
+            bestChargeableDist = dist;
+            bestChargeable = i;
+        }
+    }
+
+    return bestChargeable > 0 ? bestChargeable : bestFallback;
+}
+
+/**
 * 计算 charger 是否允许概率冲锋
 * @param client 客户端索引
 * @return bool, true 允许概率冲锋, false 不允许

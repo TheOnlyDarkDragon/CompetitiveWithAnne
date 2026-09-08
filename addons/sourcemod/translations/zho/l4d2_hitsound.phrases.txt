@@ -136,6 +136,18 @@
 	{
 		"zho"		"音效播放模式：強制合併（同幀最多響一條，按 擊殺>爆頭>命中 優先）"
 	}
+	"L4D2Hitsound_LethalModeFollow"
+	{
+		"zho"		"致死幀命中音：跟隨套裝（只有 lethal_hit=1 的套裝才在致死那發補播命中音）"
+	}
+	"L4D2Hitsound_LethalModeOn"
+	{
+		"zho"		"致死幀命中音：強制補播（致死那發同時響命中/爆頭音和擊殺音，需搭配疊加模式）"
+	}
+	"L4D2Hitsound_LethalModeOff"
+	{
+		"zho"		"致死幀命中音：強制不補播（致死那發只響擊殺音）"
+	}
 	"L4D2Hitsound_SetPlaybackPreset"
 	{
 		"zho"		"[Hitsound] 已按該套裝套用音效範圍"

@@ -41,6 +41,8 @@ stock void RegisterState_Bait() {
 stock void StateBait_OnEnter(int client) {
     g_AiChargers[client].m_flLastVisibleTime = GetGameTime();
     resetBaitClawTracking(client);
+    // 距离控制的方向锁是每次进入博弈重新开始的, 僵持计时则刻意不在这里重置
+    resetBaitMoveControl(client);
     stateLog.debugAll("\n========== Charger (%N) State Bait On Enter ===========", client);
 }
 
@@ -57,6 +59,7 @@ stock Action StateBait_OnUpdate(int client, int& buttons, float vel[3], float an
     target = GetClientOfUserId(g_AiChargers[client].m_iTarget);
     if (!IsValidSurvivor(target) || !IsPlayerAlive(target)) {
         stateLog.debugAll("(%s) Charger (%N)'s target %d is invalid, transition to APPROACH STATE", STATE_BAIT_NAME, client, target);
+        resetMeleeStalemate(client);
         g_ChargerStateContext[client].transitionTo(CH_STATE_APPROACH);
         return Plugin_Continue;
     }
@@ -127,6 +130,7 @@ stock Action StateBait_OnUpdate(int client, int& buttons, float vel[3], float an
             !isChargePathBlocked(client, betterTarget)
         ) {
             stateLog.debugAll("Charger (%N) find a better charge target %N, transition to LOCKED STATE", client, betterTarget);
+            resetMeleeStalemate(client);
             g_AiChargers[client].m_iBetterTarget = GetClientUserId(betterTarget);
             g_ChargerStateContext[client].transitionTo(CH_STATE_LOCKED);
             return Plugin_Changed;
@@ -173,6 +177,9 @@ stock Action StateBait_OnUpdate(int client, int& buttons, float vel[3], float an
     // ============================================================
     static Action resAction;
     if (threatType == Threat_Melee) {
+        // 僵持计时跟着 "目标 + 连续近战博弈" 走, Bait <-> Approach 的来回抖动不会把它清零
+        updateMeleeStalemate(client, target);
+
         // 只有近战博弈会使用 watcher 数据，避免枪械目标每 tick 扫描所有生还者。
         static bool isWatching;
         static int watchers;
@@ -263,51 +270,87 @@ Action maintainMeleeBaitDistance(int client, int target, float dist, bool visibl
     if (g_AiChargers[client].m_BhopType == BhopType_BaitRetreat) {
         g_AiChargers[client].m_BhopType = BhopType_None;
         g_AiChargers[client].m_flLastHopSpeed = 0.0;
+        /*
+        * 后跳刚落地, 锁一小段时间不允许距离控制立刻掉头前进
+        * 否则 "后跳出去 -> 落地即前进 -> 又太近 -> 再后跳" 会在每一帧互相打架, 观感上就是原地抽搐
+        */
+        g_AiChargers[client].m_flBaitBackhopLockUntil = GetGameTime() + BAIT_BACKHOP_LOCK_TIME;
     }
 
     // 只有目标正在看着 Charger 时才进行距离博弈, 否则目标不看着 Charger, 安全, 不需要进行近战博弈操作
-    if (!isTargetWatchingCharger(client, target))
+    if (!isTargetWatchingCharger(client, target)) {
+        resetBaitMoveControl(client);
         return Plugin_Continue;
+    }
 
-    static float meleeRange, baitZoneMin, baitZoneMax;
+    static float meleeRange, baitZoneMin, baitZoneMax, baitZoneMid;
     meleeRange = !cvMeleeRange ? DEFAULT_MELEE_RANGE : cvMeleeRange.FloatValue;
     baitZoneMin = meleeRange + g_cvMeleeBaitZoneMinRange.FloatValue;
     baitZoneMax = meleeRange + g_cvMeleeBaitZoneMaxRange.FloatValue;
+    baitZoneMid = (baitZoneMin + baitZoneMax) * 0.5;
 
     static int moveSign;
-    moveSign = BAIT_RETREAT_NONE;
+    moveSign = updateBaitMoveSign(client, dist, baitZoneMin, baitZoneMax, baitZoneMid);
 
-    if (dist < baitZoneMin) {
-        // 距离过近, 沿 awayDir 后退
-        moveSign = BAIT_RETREAT_BACK;
-    } else if (dist > baitZoneMax) {
-        // 距离过远, 朝目标前进
-        moveSign = BAIT_RETREAT_FORWARD;
-    }
+    static bool orbiting;
+    orbiting = g_cvMeleeBaitOrbit != null && g_cvMeleeBaitOrbit.BoolValue;
 
-    if (moveSign == 0) {
+    /*
+    * 死区内且没开绕圈: 不再每帧把水平速度硬清零 (那是 "按一下马上停止" 的直接来源),
+    * 改成逐帧衰减, 观感上是滑停而不是卡停
+    */
+    if (moveSign == BAIT_RETREAT_NONE && !orbiting) {
         buttons &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
         cmdVel[0] = 0.0;
         cmdVel[1] = 0.0;
-        currentVel[0] = 0.0;
-        currentVel[1] = 0.0;
+        currentVel[0] *= BAIT_MOVE_DEADZONE_DAMP;
+        currentVel[1] *= BAIT_MOVE_DEADZONE_DAMP;
         TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, currentVel);
         return Plugin_Changed;
     }
 
-    static float baseSpeed, moveSpeed;
+    static float baseSpeed, radialSpeed, distError;
     baseSpeed = SDKCall(g_hSdkGetRunTopSpeed, client);
-    moveSpeed = baseSpeed;
+
+    /*
+    * 比例速度: 以带中心为目标, 距离误差越小走得越慢, 误差达到 BAIT_MOVE_SPEED_RAMP 才用满速
+    * 原来无论误差 1 单位还是 30 单位都是满速, 才会出现 "全速蹦一下 -> 立刻归零" 的抽搐
+    */
+    radialSpeed = 0.0;
+    if (moveSign != BAIT_RETREAT_NONE) {
+        distError = moveSign == BAIT_RETREAT_BACK ? (baitZoneMid - dist) : (dist - baitZoneMid);
+        radialSpeed = baseSpeed * getBaitMoveSpeedRatio(distError);
+    }
 
     static float desiredVel[3];
-    desiredVel[0] = awayDir[0] * moveSpeed * float(moveSign);
-    desiredVel[1] = awayDir[1] * moveSpeed * float(moveSign);
-    desiredVel[2] = 0.0;
+    buildBaitMoveVelocity(client, awayDir, moveSign, radialSpeed, baseSpeed, orbiting, desiredVel);
 
     if (!nextTickPosCheck(client, desiredVel, visible)) {
-        // 无论前进还是后退, 方向不安全都不接管移动
-        // handleMeleeThreat 已在这个函数之前执行, 此时保留其朝着目标右键打拳或者冲锋决策及原生 PathFollower 输入
-        return Plugin_Continue;
+        // 绕圈方向被挡住时先换个方向再试一次, 换向本身有冷却, 不会贴着墙每帧左右横跳
+        if (orbiting && flipBaitOrbitDir(client))
+            buildBaitMoveVelocity(client, awayDir, moveSign, radialSpeed, baseSpeed, orbiting, desiredVel);
+
+        if (!nextTickPosCheck(client, desiredVel, visible)) {
+            resetBaitMoveControl(client);
+
+            /*
+            * 本来就是要站住的 (只是想顺便绕两步), 那就老老实实站住并衰减速度
+            * 这里如果把控制权交回原生寻路, PathFollower 会直接把 Charger 往目标身上送, 然后触发紧急后跳, 反而更抖
+            */
+            if (moveSign == BAIT_RETREAT_NONE) {
+                buttons &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
+                cmdVel[0] = 0.0;
+                cmdVel[1] = 0.0;
+                currentVel[0] *= BAIT_MOVE_DEADZONE_DAMP;
+                currentVel[1] *= BAIT_MOVE_DEADZONE_DAMP;
+                TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, currentVel);
+                return Plugin_Changed;
+            }
+
+            // 确实需要移动但方向不安全, 不接管移动
+            // handleMeleeThreat 已在这个函数之前执行, 此时保留其朝着目标右键打拳或者冲锋决策及原生 PathFollower 输入
+            return Plugin_Continue;
+        }
     }
 
     buttons &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
@@ -322,6 +365,127 @@ Action maintainMeleeBaitDistance(int client, int target, float dist, bool visibl
     ZeroVector(g_AiChargers[client].m_vecAirCorrGoal);
     g_AiChargers[client].m_AirStrafe.init();
     return Plugin_Changed;
+}
+
+/**
+* 计算这一帧的距离控制方向, 带迟滞和最短驻留
+* 迟滞: 一旦开始移动就一直走到博弈带中心才松手, 而不是刚进带边缘就撒手, 方向翻转需要跨越半个带宽
+* 最短驻留: 同一方向至少维持 BAIT_MOVE_HOLD_TIME, 从根上堵死方向每帧翻转
+* @param client Charger 客户端索引
+* @param dist 到目标的距离
+* @param zoneMin 博弈带内边界
+* @param zoneMax 博弈带外边界
+* @param zoneMid 博弈带中心
+* @return int, BAIT_RETREAT_BACK / BAIT_RETREAT_FORWARD / BAIT_RETREAT_NONE
+**/
+int updateBaitMoveSign(int client, float dist, float zoneMin, float zoneMax, float zoneMid) {
+    static float now;
+    now = GetGameTime();
+
+    static int sign;
+    sign = g_AiChargers[client].m_iBaitMoveSign;
+
+    if (sign != BAIT_RETREAT_NONE && now < g_AiChargers[client].m_flBaitMoveHoldUntil) {
+        // 驻留期内保持方向不变
+    } else if (sign == BAIT_RETREAT_BACK) {
+        sign = dist >= zoneMid ? BAIT_RETREAT_NONE : BAIT_RETREAT_BACK;
+    } else if (sign == BAIT_RETREAT_FORWARD) {
+        sign = dist <= zoneMid ? BAIT_RETREAT_NONE : BAIT_RETREAT_FORWARD;
+    } else if (dist < zoneMin) {
+        sign = BAIT_RETREAT_BACK;
+    } else if (dist > zoneMax) {
+        sign = BAIT_RETREAT_FORWARD;
+    } else {
+        sign = BAIT_RETREAT_NONE;
+    }
+
+    // 后跳刚落地的锁定期内不允许掉头前进, 但仍然允许继续后退
+    if (sign == BAIT_RETREAT_FORWARD && now < g_AiChargers[client].m_flBaitBackhopLockUntil)
+        sign = BAIT_RETREAT_NONE;
+
+    if (sign != g_AiChargers[client].m_iBaitMoveSign) {
+        g_AiChargers[client].m_iBaitMoveSign = sign;
+        g_AiChargers[client].m_flBaitMoveHoldUntil = sign != BAIT_RETREAT_NONE ? now + BAIT_MOVE_HOLD_TIME : 0.0;
+    }
+
+    return sign;
+}
+
+/**
+* 距离误差到速度比例的映射, 结果限制在 [BAIT_MOVE_MIN_SPEED_RATIO, 1.0]
+**/
+float getBaitMoveSpeedRatio(float distError) {
+    if (distError < 0.0)
+        distError = 0.0;
+
+    static float ratio;
+    ratio = distError / BAIT_MOVE_SPEED_RAMP;
+    if (ratio < BAIT_MOVE_MIN_SPEED_RATIO)
+        ratio = BAIT_MOVE_MIN_SPEED_RATIO;
+    if (ratio > 1.0)
+        ratio = 1.0;
+
+    return ratio;
+}
+
+/**
+* 组合出这一帧的博弈移动速度 = 径向分量 (进/退) + 切向分量 (绕圈)
+* 切向分量让 Charger 在保持半径的同时绕着目标转, 把 "原地抽搐" 变成 "绕着你转圈找机会"
+**/
+void buildBaitMoveVelocity(int client, const float awayDir[3], int moveSign, float radialSpeed, float baseSpeed, bool orbiting, float outVel[3]) {
+    outVel[0] = awayDir[0] * radialSpeed * float(moveSign);
+    outVel[1] = awayDir[1] * radialSpeed * float(moveSign);
+    outVel[2] = 0.0;
+
+    if (!orbiting)
+        return;
+
+    if (g_AiChargers[client].m_iBaitOrbitDir == 0)
+        g_AiChargers[client].m_iBaitOrbitDir = GetRandomInt(0, 1) == 0 ? -1 : 1;
+
+    // 切向 = awayDir 绕 Z 轴旋转 90 度
+    static float orbitSpeed;
+    orbitSpeed = baseSpeed * BAIT_ORBIT_SPEED_RATIO * float(g_AiChargers[client].m_iBaitOrbitDir);
+    outVel[0] += -awayDir[1] * orbitSpeed;
+    outVel[1] += awayDir[0] * orbitSpeed;
+}
+
+/**
+* 翻转绕圈方向 (绕圈方向被墙挡住时调用), 带冷却避免贴着墙每帧左右横跳
+* @return bool, 是否真的翻转了
+**/
+bool flipBaitOrbitDir(int client) {
+    if (GetGameTime() < g_AiChargers[client].m_flBaitOrbitFlipTime)
+        return false;
+
+    g_AiChargers[client].m_iBaitOrbitDir = g_AiChargers[client].m_iBaitOrbitDir == 0
+        ? (GetRandomInt(0, 1) == 0 ? -1 : 1)
+        : -g_AiChargers[client].m_iBaitOrbitDir;
+    g_AiChargers[client].m_flBaitOrbitFlipTime = GetGameTime() + BAIT_ORBIT_FLIP_INTERVAL;
+    return true;
+}
+
+/**
+* 清掉距离控制的方向锁 (退出博弈 / 目标不再看着 Charger / 接管失败时调用)
+**/
+void resetBaitMoveControl(int client) {
+    g_AiChargers[client].m_iBaitMoveSign = BAIT_RETREAT_NONE;
+    g_AiChargers[client].m_flBaitMoveHoldUntil = 0.0;
+}
+
+/**
+* 紧急后跳的距离阈值
+* 原来直接用 meleeRange + MELEE_EMERGENCY_BUFFER (70 + 20 = 90), 比 baitZoneMin (70 + 15 = 85) 还远,
+* 于是 Charger 站在自己博弈带的内半边时永远处在 "紧急" 状态, 每帧都想后跳, 死区根本没机会生效
+* 这里把紧急线压到博弈带内侧, 保证 [紧急线, baitZoneMin] 之间有一段真正可以站住的空间
+**/
+float getMeleeEmergencyDist(float meleeRange, float baitZoneMinRange) {
+    static float buffer;
+    buffer = baitZoneMinRange * 0.5;
+    if (buffer > MELEE_EMERGENCY_BUFFER)
+        buffer = MELEE_EMERGENCY_BUFFER;
+
+    return meleeRange + buffer;
 }
 
 /**
@@ -403,14 +567,27 @@ Action handleMeleeThreat(int client, int target, float dist, bool visible, bool 
         isChargeAbilityReady(client)
     ) {
         stateLog.debugAll("Charger (%N) melee bait: charging holding melee target (%N), dist %.2f, transition to LOCKED STATE", client, target, dist);
+        resetMeleeStalemate(client);
         g_ChargerStateContext[client].transitionTo(CH_STATE_LOCKED);
         return Plugin_Changed;
     }
 
     /*
+    * 僵持升级
+    * Charger 血量低于近战斩杀线时 shouldChargeInMeleeBait 的血量分支恒假, 只剩 "玩家扭头" 一条路,
+    * 如果不给一个出口, 就会在博弈带里无限对峙下去. 这里按 诱骗 -> 强冲 -> 换目标 的阶梯逐级升级
+    */
+    if (IsClientOnGround(client) && isMeleeStalemateTimedOut(client)) {
+        static Action escalation;
+        escalation = escalateMeleeStalemate(client, target, dist, meleeRange, buttons, ang);
+        if (escalation != Plugin_Continue)
+            return escalation;
+    }
+
+    /*
     * 如果不满足冲锋条件, 那么目标接近时尝试后跳
     * 1. 目标主动进入 baitZoneMin 时, 且在 target -> Charger 方向的速度分量大于 MELEE_PRESS_MIN_SPEED 时, 表示目标正在主动接近 Charger, 应该后跳
-    * 2. 目标距离 Charger 小于 (meleeRange + MELEE_EMERGENCY_BUFFER) 时, 情况紧急, 应该后跳, 否则会被砍
+    * 2. 目标距离 Charger 小于紧急线 (getMeleeEmergencyDist) 时, 情况紧急, 应该后跳, 否则会被砍
     */
     static float chargerPos[3], targetPos[3], targetVel[3], targetToCharger[3];
     GetClientAbsOrigin(client, chargerPos);
@@ -428,11 +605,11 @@ Action handleMeleeThreat(int client, int target, float dist, bool visible, bool 
 
     /*
     * targetPressing: 目标主动进入 baitZoneMin 时, 且速度分量大于 MELEE_PRESS_MIN_SPEED 时, 应该后跳
-    * emergencyClose: 目标距离 Charger 小于 (meleeRange + MELEE_EMERGENCY_BUFFER) 时, 情况紧急, 应该后跳, 否则会被砍
+    * emergencyClose: 目标距离 Charger 小于紧急线时, 情况紧急, 应该后跳, 否则会被砍
     */
     static bool targetPressing, emergencyClose;
     targetPressing = dist <= baitZoneMin && targetApproachSpeed >= MELEE_PRESS_MIN_SPEED;
-    emergencyClose = dist <= meleeRange + MELEE_EMERGENCY_BUFFER;
+    emergencyClose = dist <= getMeleeEmergencyDist(meleeRange, g_cvMeleeBaitZoneMinRange.FloatValue);
 
     // 无法冲锋时, 目标主动进入 baitZoneMin 或已经过近才尝试后跳
     if (targetPressing || emergencyClose) {
@@ -468,12 +645,218 @@ bool shouldChargeInMeleeBait(int client, int target, int health, bool visible, b
     // 2. 目标手持近战, 且处于易受攻击状态, 直接冲锋
     if (isTargetVulnerable(client, target))
         return true;
-    // 3. 目标手持近战, 且不处于易受攻击状态, Charger 血量大于近战斩杀线时, 概率冲锋
+    /*
+    * 3. 目标刚挥空一刀, 抓后摇冲锋
+    * isTargetVulnerable 对所有武器统一用 "下次攻击时间 > 现在 + 0.5" 判断攻击间隔,
+    * 而近战武器整个挥击周期本身才 0.6 ~ 0.9 秒, 留给 Charger 的窗口只剩 0.1 ~ 0.3 秒, 每帧碰运气基本抓不到,
+    * 这里对近战目标单独用一个更短的阈值, 让残血 Charger 也有一个凭本事进场的机会
+    */
+    if (isMeleeTargetInSwingRecovery(target))
+        return true;
+    // 4. 目标手持近战, 且不处于易受攻击状态, Charger 血量大于近战斩杀线时, 概率冲锋
     static int meleeDamageCharger;
     meleeDamageCharger = getLegacyMeleeDamage();
     if (health > meleeDamageCharger && isChargerProbCharge(client))
         return true;
     return false;
+}
+
+// =========================================================================
+// 近战僵持追踪与升级
+// =========================================================================
+
+/**
+* 刷新近战僵持计时
+* 关键点: 计时器绑定在 "目标 + 连续近战博弈" 上, 而不是 Bait 状态上
+* Bait 状态的 startTime 每次 transitionTo 都会重置, 而后跳一次就会飞出退出线走一轮 Bait -> Approach -> Bait,
+* 原来挂在 getStateDuration 上的兜底强冲因此几乎永远等不到, 僵局才会无限持续
+* 只要两次近战博弈的间隔小于 MELEE_STALEMATE_KEEP_GAP, 这里的计时就继续累加
+* @param client Charger 客户端索引
+* @param target 目标索引
+* @return void
+**/
+void updateMeleeStalemate(int client, int target) {
+    static float now;
+    static int targetUserId;
+    now = GetGameTime();
+    targetUserId = GetClientUserId(target);
+
+    if (g_AiChargers[client].m_iStalemateTarget != targetUserId ||
+        g_AiChargers[client].m_flStalemateStart <= 0.0 ||
+        now - g_AiChargers[client].m_flLastMeleeBaitTime > MELEE_STALEMATE_KEEP_GAP
+    ) {
+        g_AiChargers[client].m_iStalemateTarget = targetUserId;
+        g_AiChargers[client].m_flStalemateStart = now;
+        g_AiChargers[client].m_iStalemateFeints = 0;
+        g_AiChargers[client].m_flStalemateFeintUntil = 0.0;
+        g_AiChargers[client].m_flStalemateFeintCooldown = 0.0;
+    }
+
+    g_AiChargers[client].m_flLastMeleeBaitTime = now;
+}
+
+/**
+* 近战僵持是否已经超过允许的最长博弈时间
+**/
+bool isMeleeStalemateTimedOut(int client) {
+    if (g_AiChargers[client].m_flStalemateStart <= 0.0)
+        return false;
+
+    return GetGameTime() - g_AiChargers[client].m_flStalemateStart > g_cvBaitMaxDuration.FloatValue;
+}
+
+/**
+* 清空僵持追踪 (冲锋成功 / 换目标 / 目标失效时调用)
+**/
+void resetMeleeStalemate(int client) {
+    g_AiChargers[client].m_iStalemateTarget = -1;
+    g_AiChargers[client].m_flStalemateStart = 0.0;
+    g_AiChargers[client].m_flLastMeleeBaitTime = 0.0;
+    g_AiChargers[client].m_iStalemateFeints = 0;
+    g_AiChargers[client].m_flStalemateFeintUntil = 0.0;
+    g_AiChargers[client].m_flStalemateFeintCooldown = 0.0;
+}
+
+/**
+* 目标是否刚挥空近战, 处在后摇里
+* 通用的 isTargetVulnerable 用的是 0.5 秒阈值, 对近战武器来说太长, 这里单独用 MELEE_SWING_WINDOW
+**/
+bool isMeleeTargetInSwingRecovery(int target) {
+    if (!IsValidSurvivor(target) || !IsPlayerAlive(target))
+        return false;
+
+    static int weapon;
+    weapon = GetEntPropEnt(target, Prop_Send, "m_hActiveWeapon");
+    if (!IsValidEntity(weapon) || !HasEntProp(weapon, Prop_Send, "m_flNextPrimaryAttack"))
+        return false;
+
+    return GetEntPropFloat(weapon, Prop_Send, "m_flNextPrimaryAttack") > GetGameTime() + MELEE_SWING_WINDOW;
+}
+
+/**
+* 僵持升级阶梯
+* 1. 诱骗: 主动往里顶一下逼目标出刀, 挥空的后摇由 shouldChargeInMeleeBait 抓, 顶到紧急线就交回常规逻辑后跳拉开
+* 2. 强冲: 诱骗次数用完还是没机会, 直接撞. 撞倒一个人再被砍死是划算的, 站在原地抖不划算
+* 3. 换目标: 只有连撞都撞不过去 (高度不可达 / 冲锋路径被挡) 才考虑改打别人, 默认关闭
+* @param client Charger 客户端索引
+* @param target 目标索引
+* @param dist 到目标的距离
+* @param meleeRange 目标近战武器的攻击距离
+* @return Action
+**/
+Action escalateMeleeStalemate(int client, int target, float dist, float meleeRange, int& buttons, float ang[3]) {
+    /*
+    * 技能还在 CD 只是 "现在还撞不了", 不是 "撞不过去"
+    * 这时候正确的做法就是保持距离等技能: 既不该往里顶去白挨一刀 (顶进去也没东西可打), 也不该因为 CD 就把人换了
+    */
+    if (!isChargeAbilityReady(client))
+        return Plugin_Continue;
+
+    if (g_AiChargers[client].m_iStalemateFeints < MELEE_STALEMATE_FEINT_LIMIT) {
+        static Action feintResult;
+        feintResult = performMeleeFeint(client, target, dist, meleeRange, buttons, ang);
+        if (feintResult != Plugin_Continue)
+            return feintResult;
+    }
+
+    if (isChargeTargetHeightReachable(client, target) && !isChargePathBlocked(client, target)) {
+        stateLog.debugAll("Charger (%N) melee stalemate with target (%N) timed out, forcing charge, dist %.2f", client, target, dist);
+        resetMeleeStalemate(client);
+        g_ChargerStateContext[client].transitionTo(CH_STATE_LOCKED);
+        return Plugin_Changed;
+    }
+
+    // 技能就绪却依然撞不过去 (高度不可达 / 冲锋路径被挡), 这才是真的无解, 考虑改打别人
+    if (g_cvMeleeBaitStalemateSwitch != null && g_cvMeleeBaitStalemateSwitch.BoolValue) {
+        static int newTarget;
+        newTarget = findMeleeStalemateSwitchTarget(client, target);
+        if (IsValidSurvivor(newTarget) && IsPlayerAlive(newTarget)) {
+            stateLog.debugAll("Charger (%N) cannot break melee stalemate with (%N), switching target to (%N)", client, target, newTarget);
+            blacklistBaitTarget(client, target);
+            requestChargerTargetSwitch(client, newTarget);
+            resetMeleeStalemate(client);
+            resetBaitMoveControl(client);
+            g_ChargerStateContext[client].transitionTo(CH_STATE_APPROACH);
+            return Plugin_Changed;
+        }
+    }
+
+    return Plugin_Continue;
+}
+
+/**
+* 一次诱骗: 沿直线往目标顶, 顶到紧急线就结束这一次, 交回常规逻辑让 emergencyClose 的后跳把 Charger 拉出来
+* 这样 "进一步退一步" 变成有节奏、有目的的假动作, 目标被逼出刀挥空后 shouldChargeInMeleeBait 会立刻抓后摇冲锋
+* @return Action
+**/
+Action performMeleeFeint(int client, int target, float dist, float meleeRange, int& buttons, float ang[3]) {
+    static float now, feintDoneDist;
+    now = GetGameTime();
+    feintDoneDist = getMeleeEmergencyDist(meleeRange, g_cvMeleeBaitZoneMinRange.FloatValue);
+
+    // 诱骗窗口进行中
+    if (g_AiChargers[client].m_flStalemateFeintUntil > 0.0) {
+        if (dist <= feintDoneDist || now >= g_AiChargers[client].m_flStalemateFeintUntil) {
+            g_AiChargers[client].m_iStalemateFeints++;
+            g_AiChargers[client].m_flStalemateFeintUntil = 0.0;
+            g_AiChargers[client].m_flStalemateFeintCooldown = now + MELEE_FEINT_COOLDOWN;
+            stateLog.debugAll("Charger (%N) melee feint %d/%d on target (%N) finished at dist %.2f",
+                client, g_AiChargers[client].m_iStalemateFeints, MELEE_STALEMATE_FEINT_LIMIT, target, dist);
+            return Plugin_Continue;
+        }
+
+        return pressTowardMeleeTarget(client, target, buttons, ang);
+    }
+
+    if (now < g_AiChargers[client].m_flStalemateFeintCooldown)
+        return Plugin_Continue;
+    // 已经比紧急线还近, 这一帧该做的是被拉开而不是往里顶
+    if (dist <= feintDoneDist)
+        return Plugin_Continue;
+    if (L4D_IsPlayerStaggering(client))
+        return Plugin_Continue;
+
+    g_AiChargers[client].m_flStalemateFeintUntil = now + MELEE_FEINT_WINDOW;
+    resetBaitMoveControl(client);
+    stateLog.debugAll("Charger (%N) melee stalemate: starting feint toward target (%N), dist %.2f", client, target, dist);
+    return pressTowardMeleeTarget(client, target, buttons, ang);
+}
+
+/**
+* 沿直线朝目标顶进, 落点不安全时不接管移动
+**/
+Action pressTowardMeleeTarget(int client, int target, int& buttons, float ang[3]) {
+    if (!IsClientOnGround(client))
+        return Plugin_Continue;
+
+    static float pos[3], targetPos[3], dir[3], desiredVel[3], currentVel[3];
+    GetClientAbsOrigin(client, pos);
+    GetClientAbsOrigin(target, targetPos);
+    MakeVectorFromPoints(pos, targetPos, dir);
+    dir[2] = 0.0;
+    if (NormalizeVector(dir, dir) <= 0.0)
+        return Plugin_Continue;
+
+    static float speed;
+    speed = SDKCall(g_hSdkGetRunTopSpeed, client);
+    desiredVel[0] = dir[0] * speed;
+    desiredVel[1] = dir[1] * speed;
+    desiredVel[2] = 0.0;
+
+    if (!nextTickPosCheck(client, desiredVel, true))
+        return Plugin_Continue;
+
+    GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", currentVel);
+    desiredVel[2] = currentVel[2];
+
+    buttons &= ~(IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT);
+    buttons &= ~(IN_ATTACK | IN_ATTACK2);
+    alignChargerFacingWithMovement(client, desiredVel, ang);
+    TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, desiredVel);
+
+    g_AiChargers[client].m_BhopType = BhopType_None;
+    g_AiChargers[client].m_flLastHopSpeed = 0.0;
+    return Plugin_Changed;
 }
 
 /**
@@ -748,6 +1131,7 @@ Action beginNonMeleeCharge(int client, int target, float dist, const char[] reas
 // ============================================================
 stock void StateBait_OnExit(int client) {
     stateLog.debugAll("\n========== Charger (%N) State Bait On Exit ===========", client);
+    resetBaitMoveControl(client);
     if (g_AiChargers[client].m_BhopType == BhopType_BaitRetreat) {
         g_AiChargers[client].m_BhopType = BhopType_None;
         g_AiChargers[client].m_flLastHopSpeed = 0.0;

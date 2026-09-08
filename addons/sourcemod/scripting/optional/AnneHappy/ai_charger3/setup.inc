@@ -36,6 +36,20 @@
 #define UNAVOIDABLE_TARGET_DIST_BUFFER		120.0
 #define EVADE_MOVETO_REFRESH_MIN_DIST		50.0		// 目标至少移动该距离才重建 BehaviorMoveTo, 避免微小位置抖动反复寻路
 #define STATE_TOLERANCE_DIST                50.0		// 状态转换容差距离
+#define BAIT_MOVE_SPEED_RAMP				40.0		// 近战博弈距离控制的比例区间, 距离误差达到该值时使用满速
+#define BAIT_MOVE_MIN_SPEED_RATIO			0.35		// 近战博弈距离控制的最小速度比例, 避免误差很小时仍然满速冲刺
+#define BAIT_MOVE_HOLD_TIME					0.25		// 近战博弈距离控制同一方向的最短驻留时间, 抑制方向每帧翻转
+#define BAIT_MOVE_DEADZONE_DAMP				0.7			// 近战博弈死区内每帧的速度衰减系数, 代替直接把速度清零
+#define BAIT_BACKHOP_LOCK_TIME				0.45		// 后跳落地后禁止距离控制立刻前进的锁定时长
+#define BAIT_ORBIT_SPEED_RATIO				0.55		// 近战博弈绕圈时切向速度占跑速的比例
+#define BAIT_ORBIT_FLIP_INTERVAL			0.4			// 绕圈方向被挡住后, 最短多久允许再翻一次方向
+#define MELEE_SWING_WINDOW					0.2			// 近战目标挥空后摇窗口阈值 (通用 vulnerable 检查用的是 0.5, 对近战太长抓不到)
+#define MELEE_STALEMATE_KEEP_GAP			2.0			// 距上次近战博弈超过该时间才重置僵持计时, Approach<->Bait 抖动不清零
+#define MELEE_STALEMATE_FEINT_LIMIT			2			// 僵持升级中最多做几次诱骗
+#define MELEE_FEINT_WINDOW					0.7			// 单次诱骗最长持续时间, 超时就放弃这次贴脸
+#define MELEE_FEINT_COOLDOWN				1.2			// 两次诱骗之间的间隔
+#define CHARGER_FORCED_TARGET_TTL			3.0			// 僵持换目标登记后, 等待 OnChooseVictim 落实的有效期
+#define DEFAULT_STALEMATE_SWITCH_DIST		350.0		// 僵持换目标时的最大搜索半径 (legacy extra target 未配置时的回退值)
 #define CHARGE_Z_THRESHOLD                  57.0    	// charger 冲锋时, 如果与目标的高度差超过该值, 则取消冲锋
 #define MAX_PATH_SNAPSHOT_SEGMENTS          512			// 单次 PathFollower::Update 最多复制的路径节点数
 #define PI									3.14159265
@@ -70,6 +84,9 @@ ConVar
 	g_cvAirTurnSpeedLoss,		// 空中实际转向 90 度时损失的水平速度比例
 	g_cvAirSpeedFloorRatio,		// 空中方向修正使用的起跳保存速度下限比例
 	g_cvBaitMaxDuration,		// charger 进入博弈状态的最长时间
+	g_cvMeleeBaitOrbit,			// 近战博弈死区内是否沿切向绕圈, 代替原地急停
+	g_cvMeleeBaitStalemateSwitch,	// 近战僵持升级到最后一级时是否允许换目标
+	g_cvMeleeBaitBlacklistDur,	// 因近战僵持放弃目标后, 该目标进入黑名单的时长
 	g_cvProbChargeChkDur,		// 概率冲锋时的检测间隔
 	g_cvProbChargeProb,			// 概率冲锋的概率到达这个数值可冲锋
 	g_cvAntiRetreat,			// 是否阻止 charger 逃跑
@@ -195,6 +212,23 @@ enum struct AiCharger {
 	float m_flLastClawNextAttack;		// 上次读到的爪击 m_flNextPrimaryAttack, 用于检测新挥击
 	float m_flBaitClawStart;			// 开始尝试锤击的时间, 超时则改为冲锋
 
+	// 近战博弈距离控制 (迟滞 + 比例 + 最短驻留)
+	int m_iBaitMoveSign;				// 当前距离控制方向, 带迟滞, 退到带中心才松手
+	float m_flBaitMoveHoldUntil;		// 当前方向的最短驻留截止时间
+	float m_flBaitBackhopLockUntil;		// 后跳落地后禁止距离控制前进的截止时间
+	int m_iBaitOrbitDir;				// 近战博弈绕圈方向 (+1 / -1)
+	float m_flBaitOrbitFlipTime;		// 下次允许翻转绕圈方向的时间
+
+	// 近战僵持追踪 (跨 Approach <-> Bait 抖动保留)
+	int m_iStalemateTarget;				// 僵持计时绑定的目标 userId
+	float m_flStalemateStart;			// 僵持开始时间
+	float m_flLastMeleeBaitTime;		// 上次处于近战博弈的时间
+	int m_iStalemateFeints;				// 已经做过的诱骗次数
+	float m_flStalemateFeintUntil;		// 当前一次诱骗的截止时间
+	float m_flStalemateFeintCooldown;	// 下一次允许发起诱骗的时间
+	float m_flTargetSwingNextAttack;	// 上次读到的目标近战 m_flNextPrimaryAttack, 用于识别挥空
+	bool m_bTargetSwingBaselineValid;	// 目标近战挥击基线是否有效
+
 	void init() {
 		this.m_iTarget = -1;
 		this.m_iBetterTarget = -1;
@@ -215,6 +249,19 @@ enum struct AiCharger {
 		this.m_bBaitClawBaselineValid = false;
 		this.m_flLastClawNextAttack = 0.0;
 		this.m_flBaitClawStart = 0.0;
+		this.m_iBaitMoveSign = 0;
+		this.m_flBaitMoveHoldUntil = 0.0;
+		this.m_flBaitBackhopLockUntil = 0.0;
+		this.m_iBaitOrbitDir = 0;
+		this.m_flBaitOrbitFlipTime = 0.0;
+		this.m_iStalemateTarget = -1;
+		this.m_flStalemateStart = 0.0;
+		this.m_flLastMeleeBaitTime = 0.0;
+		this.m_iStalemateFeints = 0;
+		this.m_flStalemateFeintUntil = 0.0;
+		this.m_flStalemateFeintCooldown = 0.0;
+		this.m_flTargetSwingNextAttack = 0.0;
+		this.m_bTargetSwingBaselineValid = false;
 		this.m_bPathSnapshotComplete = false;
 		this.m_bPathInvalidatePending = false;
 		this.m_PathSegment.init();
@@ -226,6 +273,12 @@ enum struct AiCharger {
 }
 AiCharger g_AiChargers[MAXPLAYERS + 1];
 ArrayList g_ChargerPathSnapshots[MAXPLAYERS + 1];
+
+// 近战僵持放弃目标后的黑名单 (charger -> survivor 的过期时间), 防止 OnChooseVictim 立刻把同一个人选回来
+float g_flBaitTargetBlacklist[MAXPLAYERS + 1][MAXPLAYERS + 1];
+// 近战僵持换目标后的强制目标, 等待下一次 L4D2_OnChooseVictim 落实
+int g_iChargerForcedTarget[MAXPLAYERS + 1];
+float g_flChargerForcedTargetUntil[MAXPLAYERS + 1];
 
 // 定义状态函数原型 Funcion Properties
 typedef StateFunc_Enter = function void(int client);

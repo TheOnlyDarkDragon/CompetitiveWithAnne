@@ -136,6 +136,18 @@
 	{
 		"ko"		"사운드 재생 모드: 강제 병합(프레임당 최대 1개, 킬>헤드샷>타격 우선)"
 	}
+	"L4D2Hitsound_LethalModeFollow"
+	{
+		"ko"		"마지막 일격 타격음: 사운드 세트 따름(lethal_hit=1 세트만 마지막 일격에 타격음을 함께 재생)"
+	}
+	"L4D2Hitsound_LethalModeOn"
+	{
+		"ko"		"마지막 일격 타격음: 강제 재생(마지막 일격에 타격/헤드샷음과 킬음이 함께 울림; 중첩 모드 필요)"
+	}
+	"L4D2Hitsound_LethalModeOff"
+	{
+		"ko"		"마지막 일격 타격음: 강제 끄기(마지막 일격에는 킬음만 울림)"
+	}
 	"L4D2Hitsound_SetPlaybackPreset"
 	{
 		"ko"		"[Hitsound] 이 세트의 사운드 범위를 적용했습니다."

@@ -38,7 +38,7 @@ public Plugin myinfo =
 	name 			= "Ai-Charger 3.0",
 	author 			= "夜羽真白",
 	description 	= "Ai Charger 增强 3.0 版本",
-	version 		= "1.0.1.13",
+	version 		= "1.0.1.14",
 	url 			= "https://steamcommunity.com/id/saku_ra/"
 }
 
@@ -95,6 +95,9 @@ public void OnPluginStart() {
 	g_cvAirSpeedFloorRatio = CreateConVar("ai_charger3_air_speed_floor_ratio", "0.50", "空中方向修正使用的起跳保存速度下限比例", CVAR_FLAGS, true, 0.0, true, 1.0);
 	// the maximum allowed duration (in seconds) for charger to stay in the bait state
 	g_cvBaitMaxDuration = CreateConVar("ai_charger3_bait_max_duration", "7.0", "Charger 进入博弈状态的最大允许时间", CVAR_FLAGS, true, 0.0);
+	g_cvMeleeBaitOrbit = CreateConVar("ai_charger3_melee_bait_orbit", "1", "近战博弈处于博弈区内时, 沿目标切向绕圈代替原地急停 (0 = 关闭, 保持原地站定)", CVAR_FLAGS, true, 0.0, true, 1.0);
+	g_cvMeleeBaitStalemateSwitch = CreateConVar("ai_charger3_melee_bait_stalemate_switch", "0", "近战僵持升级到最后一级 (诱骗与强冲都不可行) 时, 是否允许改冲其他生还者", CVAR_FLAGS, true, 0.0, true, 1.0);
+	g_cvMeleeBaitBlacklistDur = CreateConVar("ai_charger3_melee_bait_blacklist_dur", "10.0", "因近战僵持放弃某个目标后, 该目标进入选目标黑名单的时长", CVAR_FLAGS, true, 0.0);
 	// the detection interval (in seconds) for charger's probabilistic charge when in the bait state
 	g_cvProbChargeChkDur = CreateConVar("ai_charger3_prob_charge_chk_dur", "0.5", "Charger 进入博弈状态概率冲锋的检测间隔", CVAR_FLAGS, true, 0.0);
 	// the probability (0.0 to 1.0) of charger performing a probabilistic charge when in the bait state
@@ -284,6 +287,8 @@ void evtPlayerSpawn(Event event, const char[] name, bool dontBroadcast) {
 	
 	// 新的 charger, 重置状态
 	g_AiChargers[client].init();
+	clearBaitTargetBlacklist(client);
+	clearChargerForcedTarget(client);
 	AIPathMovement_Reset(client);
 	AIPathMovement_ResetHopChain(client);
 	clearPathSnapshot(client);
@@ -303,6 +308,21 @@ public void OnMapEnd() {
 public Action L4D2_OnChooseVictim(int client, int &curTarget) {
 	if (!isAiCharger(client))
 		return Plugin_Continue;
+
+	// 近战僵持无解时登记的强制目标, 优先于常规选目标逻辑落实一次
+	int forcedTarget = getChargerForcedTarget(client);
+	if (forcedTarget > 0 && !SITL_TargetCapBlocks(client, forcedTarget))
+	{
+		clearChargerForcedTarget(client);
+		g_AiChargers[client].m_iTarget = GetClientUserId(forcedTarget);
+		if (curTarget != forcedTarget)
+		{
+			curTarget = forcedTarget;
+			SITL_CommitVictim(client, forcedTarget);
+			return Plugin_Changed;
+		}
+		return Plugin_Continue;
+	}
 
 	int selected = selectLegacyCompatibleTarget(client, curTarget);
 	// 新目标已达到控制类锁定上限时放弃改写，保持引擎/底层分配结果
@@ -327,6 +347,9 @@ bool isLegacyTargetCandidate(int client, int target, const float origin[3], floa
 		return false;
 	if (IsClientIncapped(target) || IsClientHanging(target) || IsClientPinned(target))
 		return false;
+	// 刚因为近战僵持放弃过的目标, 冷却期内不要立刻再选回来
+	if (isBaitTargetBlacklisted(client, target))
+		return false;
 
 	float targetPos[3];
 	GetClientAbsOrigin(target, targetPos);
@@ -337,7 +360,12 @@ bool isLegacyTargetCandidate(int client, int target, const float origin[3], floa
 int selectLegacyCompatibleTarget(int client, int currentTarget)
 {
 	if (!g_cvLegacyTarget || g_cvLegacyTarget.IntValue <= 1)
-		return (IsValidSurvivor(currentTarget) && IsPlayerAlive(currentTarget)) ? currentTarget : getClosestSurvivorAndValid(client);
+	{
+		if (IsValidSurvivor(currentTarget) && IsPlayerAlive(currentTarget) && !isBaitTargetBlacklisted(client, currentTarget))
+			return currentTarget;
+		// 黑名单只是偏好, getClosestSurvivorAndValid 不看黑名单, 保证极端情况下不会没有目标
+		return getClosestSurvivorAndValid(client);
+	}
 
 	float origin[3];
 	GetClientAbsOrigin(client, origin);
@@ -385,7 +413,7 @@ int selectLegacyCompatibleTarget(int client, int currentTarget)
 
 	if (bestTarget > 0)
 		return bestTarget;
-	if (IsValidSurvivor(currentTarget) && IsPlayerAlive(currentTarget))
+	if (IsValidSurvivor(currentTarget) && IsPlayerAlive(currentTarget) && !isBaitTargetBlacklisted(client, currentTarget))
 		return currentTarget;
 	return getClosestSurvivorAndValid(client);
 }
