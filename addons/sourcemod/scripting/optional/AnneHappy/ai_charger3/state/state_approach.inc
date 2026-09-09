@@ -112,7 +112,7 @@ stock Action StateApproach_OnUpdate(int client, int& buttons, float vel[3], floa
     }
     // 2. 面对近战威胁的博弈 (切换到 BAIT 博弈逻辑)
     // 若 charger 目标手持近战武器, 设置一个博弈区为 melee_range + g_cvMeleeBaitZoneMaxRange.FloatValue
-    // charger 在空中进入该区域时, 急停, 进入博弈状态, 若在地上, 直接进入博弈状态, 避免 g_cvBhopMinDist.FloatValue 设置的太小, 连跳到目标脸上被砍
+    // 空中进入该区域时只切状态, 不急停清水平速度; 这一跳按物理落地, 后跳交给 Bait 在地面发起
     static TargetThreatType threatType;
     threatType = getTargetThreatType(client, target);
     if (threatType == Threat_Melee) {
@@ -121,21 +121,9 @@ stock Action StateApproach_OnUpdate(int client, int& buttons, float vel[3], floa
         baitZoneMax = meleeRange + g_cvMeleeBaitZoneMaxRange.FloatValue;
 
         if (visible && chargeHeightReachable && dist <= baitZoneMax) {
-            // 增加 airBreak 标记, 如果是空中急停, 修正了速度之后返回 Plugin_Changed 让速度修改返回 OnPlyaerRunCmd
-            static bool airBreaked;
-            airBreaked = false;
-
-            if (!isOnGround && !g_AiChargers[client].m_bHasAirBreaked) {
-                // 如果 charger 此时在空中, 将水平方向上的速度设置为 0, 仅保留垂直方向的速度
-                vVel[0] = vVel[1] = 0.0;
-                TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, vVel);
-                g_AiChargers[client].m_bHasAirBreaked = true;
-                airBreaked = true;
-            }
-            // 转换为博弈状态
             stateLog.debugAll("Charger (%N) melee threat (%N) dist %.2f < %.2f, transition to BAIT", client, target, dist, baitZoneMax);
             g_ChargerStateContext[client].transitionTo(CH_STATE_BAIT);
-            return airBreaked ? Plugin_Changed : Plugin_Continue;
+            return Plugin_Continue;
         }
     }
     // 3. 常规距离达标后的博弈 or 准备冲锋 (转换到 BAIT 博弈逻辑)

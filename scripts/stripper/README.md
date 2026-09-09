@@ -7,6 +7,13 @@ weapon, medicine, throwable, pickup, and competitive item policy in the runtime
 prepended only to existing root Anne map configs. Other Stripper modes keep
 their original global and map configs unchanged.
 
+Official Valve campaigns (`c1`–`c14`) already have matching anne nav, so their
+map configs may keep zonemod clip/blocker/ladder `add:`s. For custom maps, do
+not add ladders, solid props, or nav-blocker entities unless the corresponding
+anne nav (or a covering `nav_fixes` script) is updated in the same change.
+`env_physics_blocker` and `env_player_blocker` may be kept if `BlockType` is
+survivors only (`1`).
+
 Stripper loads map configs at every underscore-delimited prefix. A map config
 that already inherits from a shorter existing config must not contain another
 generated global block. The generator detects that relationship automatically.

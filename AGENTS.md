@@ -7,6 +7,10 @@ When updating `Update_log.md`, also update the localized update logs used by New
 
 When syncing upstream changes from `SirPlease/L4D2-Competitive-Rework`, check whether upstream changed `cfg/stripper/zonemod`. If it added or updated Zonemod stripper entries, mirror the applicable additions/updates into the corresponding `cfg/stripper/zonemod_anne` stripper files as well.
 
+Official Valve campaigns (`c1`–`c14`) already have matching anne nav: copy their zonemod geometry `add:` (clips, blockers, ladders, solid props) as usual.
+
+For custom / third-party maps, do not copy `add:` of ladders, solid props, clips that are not player blockers, or nav-blocker entities into `zonemod_anne` unless the matching anne nav (or a `nav_fixes` script that covers that geometry) is updated at the same time. `env_physics_blocker` and `env_player_blocker` may be copied if `BlockType` is set to survivors only (`1`). Still mirror `filter:` / `modify:` and non-geometry `add:` (items, `nav_fixes` logic_auto).
+
 ## Infected wave timing semantics
 
 Treat the following as a behavioral contract when changing `infected_control`:

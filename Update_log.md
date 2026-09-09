@@ -997,3 +997,27 @@ witchparty 和 allcharger模式在普通药役的基础上小僵尸再减少17-2
   - `ai_charger3_melee_bait_stalemate_switch`（默认 0）：僵持阶梯最后一级，技能就绪却依然撞不过去（高度不可达 / 冲锋路径被挡）时改打别人。默认关闭，先观察前面几项的观感再决定要不要开。
   - `ai_charger3_melee_bait_blacklist_dur`（默认 10.0）：因僵持放弃某个目标后的选目标黑名单时长。没有这个黑名单，`L4D2_OnChooseVictim` 按距离会立刻把同一个近战玩家选回来（他往往就是最近的那个），换目标本身又变成新的抖动。黑名单只是偏好，极端情况下 `getClosestSurvivorAndValid` 不看黑名单，保证不会没有目标。
 - 重新编译：`ai_charger3.smx`。
+
+### 2026年9月8日 Charger 近战后跳正常化（ai_charger3 1.0.1.15）
+
+- **现象**：连跳接近拿近战的生还者时，牛会在空中突然减速停住再竖直掉下来；落地后跳的速度也对不上，普通玩家做不出那种后跳。
+- **空中急停**：Approach 进近战博弈区、以及 Bait 里非后跳的空中帧，会把水平速度 `TeleportEntity` 清零，只留下落。玩家做不到空中把 400 速瞬间抹掉，所以看起来像物理学不存在。现在这两处都不清水平速度，这一跳按动量落地，落地后再后跳。
+- **后跳速度**：原先按生还者追速 × 1.2 叠在跑速上，一跳就能到 400+。改成和 Path / Direct 连跳同一套：已有的远离分量留下，朝目标飞来的速度转身时丢掉，再加落地加速度，并用连跳上限封顶。
+- 重新编译：`ai_charger3.smx`。
+
+### 2026年9月9日 Charger 连跳分档削弱（仅配置，无插件改动）
+
+- **为什么只动连跳**：牛的跑速和生还者一样是 220，它能不能压到人身上完全靠连跳。所以连跳参数就是牛的压制力本身，而且这一整套都只改「怎么跳」，不改「跳不跳」——牛看起来仍然在主动扑人，只是更好打、更容易被躲开，不会变成站着发呆的傻牛。全部改动都在 `dynamic_ai_difficulty.cfg` 六档里，插件源码和 smx 行为不变，**音理档（level6）的取值全部等于插件默认值，与改动前完全一致**。
+- **侧向连跳（性价比最高的一项）**：`ai_charger3_bhop_strafe_mindeg` / `maxdeg` 六档 8~18 / 14~28 / 20~38 / 25~46 / 28~52 / 30~55 度。振幅是 `tan(random(mindeg, maxdeg))`，30~55 度对应 0.58~1.43，压到 8~18 度只剩 0.14~0.32，牛的进场路线基本变成直线。它一点没变慢，只是不再靠 S 形蛇皮躲枪线，**枪法好的人在它进场路上就能打死它**。配合 `ai_charger3_bhop_strafe_mindist` 六档 800 / 700 / 600 / 500 / 420 / 400，低档位等于「只有很远才蛇皮，进了 800 就直线冲」。
+- **停止连跳的距离**：`ai_charger3_bhop_min_dist` 六档 170 / 150 / 130 / 115 / 105 / 100，小于该值退出 APPROACH 进 BAIT，也就是不再连跳。这里要注意 `CHARGE_GUARANTEED_MAX_DIST`（110）已经封住了保命中下限，调大它**不会**让牛在 170 距离开冲，只会让最后 60 单位改用 220 跑速走完——玩家因此拿到一段看得见的助跑时间，而不是被一跳怼脸。
+- **无视野连跳**：`ai_charger3_bhop_no_vision` 六档 0 / 1 / 1 / 1 / 1 / 1，`ai_charger3_bhop_nvis_maxang` 六档 35 / 35 / 50 / 65 / 80 / 90。简单档要求牛先看见目标才能起跳提速；无视野时 `executeGroundBhop` 直接返回，回退到原生地面移动，不会卡状态机。去掉的是「从看不见的拐角后面用 400 速突然窜出来」，牛的爆发现在是被看见之后才开始的。
+- **空中转向**：`ai_charger3_airvec_modify_min_deg` / `max_deg` 六档 65~70 / 60~74 / 55~78 / 50~83 / 47~89 / 45~89 度。方向修正只在这个角度带内生效，抬高 min = 小幅走位它不跟，压低 max = 偏差太大直接放弃。简单档只剩 65~70 度这条很窄的带，等于起跳之后基本按原方向飞完，落点更容易被走位躲掉。侧向连跳回归路径用的是 `AIR_CORRECTION_MIN_TARGET_DEG`（1.0）而不是这个 min，S 形曲线本身不受影响。
+- **速度轴顺手再收一档**：`ai_ChagrerBhopSpeed` 30/40/50/60/80 → 20/30/42/55/70，`ai_charger3_bhop_max_speed` 400/400/400/500/700 → 330/360/390/450/600，`ai_charger3_bhop_first_hop_ratio` 0.2/0.3/0.4/0.5/0.6 → 0.0/0.15/0.3/0.45/0.55。简单档第一跳给 0 表示从跑动直接起跳只改方向不加速。音理档三项均不变。
+- **没有动的**：`ai_charger3_bhop_before_charge`（冲锋前最后一跳）全档保持 1。关掉之后 CHARGING 在 (commitDist, bhopMinDist + 50] 的容差带里会退回 APPROACH，有 APPROACH ↔ CHARGING 反复横跳的观感风险，而收益只是开冲距离从约 150 压到约 110，不值。想再削一档可以先拿它试。
+- 无需重新编译。
+
+### 2026年9月9日 zonemod_anne 去掉会挡特感的新增 stripper 实体
+
+- zonemod 上游用 stripper `add:` 补 clip、blocker、实心模型和梯子。Anne 没有跟着改对应 nav，特感仍按旧网格走，会撞上这些新实体卡住。
+- 只动三方图：从 `cfg/stripper/zonemod_anne` 去掉这些图上 2026 年 5 月同步 zonemod 之后新加的梯子/实心模型等会挡特感的几何，包括 City 17、No Echo m3、Carried Off、Dark Carnival Remix、Parish Overgrowth 等。官图 `c1`–`c14` 的 nav 已经过完，stripper 几何 `add:` 全部还原，不改。`env_physics_blocker` 和 `env_player_blocker` 都保留，并把 `BlockType` 改成只挡生还（`1`）。
+- 三方图仍保留 filter/modify、道具/药包 `add:`、`nav_fixes` 的 logic_auto，以及更早已经在 anne 里的 clip。以后同步三方图时，没有对应 nav 就不要再复制梯子/实心模型这类会挡特感的 `add:`。

@@ -592,7 +592,7 @@ Charger 通过连跳快速接近目标生还者, 是持续时间最长的状态,
 
 **状态转换条件:**
 - 与目标距离 ≤ `ai_charger3_bhop_min_dist` → 转换为 **BAIT**
-- 目标持近战武器且距离进入近战博弈区 (`melee_range + ai_charger3_melee_bait_maxrange`) → 空中急停后转换为 **BAIT**
+- 目标持近战武器且距离进入近战博弈区 (`melee_range + ai_charger3_melee_bait_maxrange`) → 转换为 **BAIT**（空中进入时不急停, 这一跳按当前水平速度落地后再后跳）
 - 落地时发现距离更近且无法躲避冲锋的目标, 且冲锋技能就绪 → 转换为 **LOCKED**
 
 ### BAIT — 博弈状态
@@ -602,7 +602,7 @@ Charger 在近距离与目标周旋, 等待最佳冲锋时机。
 **行为:**
 - 面对近战目标 — 距离控制: 博弈带为 `(melee_range + _ai_charger3_melee_bait_minrange, melee_range + _ai_charger3_melee_bait_maxrange)`, 距离控制带**迟滞**(一旦开始移动就走到带中心才松手, 方向翻转需要跨越半个带宽)、**比例速度**(速度按到带中心的距离误差线性缩放, 误差达到 `BAIT_MOVE_SPEED_RAMP` 才用满速, 下限 35%) 和**最短驻留**(同一方向至少维持 `BAIT_MOVE_HOLD_TIME` 0.25 秒)。带内不接管移动时按 `BAIT_MOVE_DEADZONE_DAMP` 逐帧衰减速度而不是硬清零, 观感上是滑停而不是卡停
 - 面对近战目标 — 绕圈: `ai_charger3_melee_bait_orbit` (默认 1) 开启时, 带内沿目标切向以 `BAIT_ORBIT_SPEED_RATIO` 的跑速绕圈代替原地站定; 绕圈方向被墙挡住会换向重试 (换向有冷却), 两个方向都不安全时原地站住而不是把控制权交回原生寻路
-- 面对近战目标 — 紧急后跳: 紧急线为 `melee_range + min(MELEE_EMERGENCY_BUFFER, _ai_charger3_melee_bait_minrange × 0.5)`, 始终压在博弈带内侧, 保证紧急线与 `baitZoneMin` 之间有一段真正能站住的空间; 后跳落地后 `BAIT_BACKHOP_LOCK_TIME` (0.45 秒) 内不允许距离控制掉头前进
+- 面对近战目标 — 紧急后跳: 紧急线为 `melee_range + min(MELEE_EMERGENCY_BUFFER, _ai_charger3_melee_bait_minrange × 0.5)`, 始终压在博弈带内侧, 保证紧急线与 `baitZoneMin` 之间有一段真正能站住的空间; 后跳速度与 Path / Direct 连跳相同 (保留已有的远离分量, 朝目标飞来的速度在转身时丢掉, 再加落地加速度), 不再按生还者追速叠加速; 后跳落地后 `BAIT_BACKHOP_LOCK_TIME` (0.45 秒) 内不允许距离控制掉头前进
 - 面对持枪目标: 进入 `ai_charger3_bhop_min_dist` (默认 100) 后不再概率等待。目标正在注视 Charger、Charger 残血、或目标处于换弹/推 CD 窗口时立即冲锋; 否则若在爪击距离内、且按目标后撤速度推算下一锤之内跑不出爪击距离, 先锤 2 下再撞; 锤不到或锤击超过 2.5 秒则直接冲。霰弹目标进入该距离立即冲锋
 - 近战僵持升级阶梯: 僵持超过 `ai_charger3_bait_max_duration` 后按 **诱骗 → 强冲 → 换目标** 逐级升级。整条阶梯以冲锋技能就绪为前提 —— 技能在 CD 只是「现在还撞不了」而不是「撞不过去」, 此时既不该往里顶去白挨一刀, 也不该因为 CD 就换人, 保持距离等技能即可
   1. **诱骗**: 主动往里顶一下逼目标出刀, 顶到紧急线就交回常规逻辑由后跳拉开, 把无目的的进退变成有节奏的假动作; 目标挥空后由破绽条件 7 抓后摇冲锋。最多做 `MELEE_STALEMATE_FEINT_LIMIT` (2) 次, 两次之间间隔 `MELEE_FEINT_COOLDOWN`
@@ -667,7 +667,7 @@ Charger 发动冲锋并处理冲锋结束后的逻辑。
 
    1. 主流连跳方式分析中基于导航路径 `PATH` 的连跳的劣势问题导致 Charger 无法有效追击目标，这个方法见仁见智吧，后续会上传普通版本 (使用之前的基于到目标方向作为连跳加速方向) 的 `state_approach.inc` 用于替换连跳方法 (主要替换 `executeGroundBhop` 地面开始连跳和 `executeAirCorrection` 空中速度方向修正函数)
    2. 以及冲锋前目标位置预测算法的不准确，导致部分场景 Charger 就算已经到达了 `lastBhopDist` 理论的冲锋目标无法躲避距离，也仍然不能准确命中目标
-   3. 若目标手持近战向 Charger 靠近, Charger 在空中进入 melee bait range 时无法后跳, 需要等待落地才能后跳, 此时生还者继续向前仍有机会用近战攻击到 Charger (地面部分的急停抽搐已在 2026-09-08 修复, 空中这段仍受滞空限制)
+   3. 若目标手持近战向 Charger 靠近, Charger 在空中进入 melee bait range 时无法后跳, 需要等待落地才能后跳, 此时生还者继续向前仍有机会用近战攻击到 Charger (空中不再急停清水平速度, 这一跳会带着连跳动量落地)
 
 ## 更新日志
 
@@ -692,4 +692,10 @@ Charger 发动冲锋并处理冲锋结束后的逻辑。
 3. 修复博弈超时兜底强冲从未生效: 原兜底挂在 BAIT 状态的 <code>getStateDuration</code> 上, 而状态 startTime 每次 transitionTo 都会重置, 一次后跳飞出退出线走一轮 BAIT → APPROACH → BAIT 就清零; 现改为绑定「目标 + 连续近战博弈」的僵持计时<br>
 4. 新增近战挥空后摇的破绽判定 (0.2 秒阈值): 通用的攻击间隔判定对所有武器统一用 0.5 秒阈值, 可用窗口 = 挥击间隔 − 0.5 秒, 快速近战窗口宽度为 0 从不触发; 改用 0.2 秒后每种近战都留出实打实的窗口, 残血 Charger 面对近战目标也有凭本事进场的机会<br>
 5. 新增僵持升级阶梯 诱骗 → 强冲 → 换目标, 以及 <code>ai_charger3_melee_bait_orbit</code> (带内切向绕圈, 默认开)、<code>ai_charger3_melee_bait_stalemate_switch</code> (僵持换目标, 默认关)、<code>ai_charger3_melee_bait_blacklist_dur</code> (换目标后的选目标黑名单时长) 三个 cvar<br>
+</details>
+
+<details>
+<summary>2026-09-08 (1.0.1.15)</summary>
+1. 去掉近战博弈的空中急停: Approach 连跳进 melee bait range, 以及 Bait 里非后跳的空中帧, 不再把水平速度 Teleport 清零, 这一跳按物理落地后再后跳<br>
+2. 后跳速度与 Path / Direct 连跳对齐: 保留已有远离分量, 朝目标飞来的速度转身丢掉, 再加落地加速度; 去掉按生还者追速 × 1.2 叠加速<br>
 </details>

@@ -13,8 +13,6 @@
 #include "./state.inc"
 
 #define STATE_BAIT_NAME         "STATE_BAIT"
-#define TARGET_PURSUIT_FACTOR   1.2       // 面对手持近战目标 Charger 后跳时, 此时目标若朝着 Charger 移动, Charger 后跳速度的加速倍数
-#define TARGET_RETREAT_FACTOR   0.5       // 面对手持近战目标 Charger 后跳时, 此时目标若远离 Charger 移动, Charger 后跳速度的减速倍数
 #define MELEE_PRESS_MIN_SPEED   50.0      // 目标朝 Charger 移动速度超过该值时, 视为主动进入近战危险区
 #define MELEE_EMERGENCY_BUFFER  20.0      // 目标距离 Charger 小于 (meleeRange + 这个值) 时, 视为非常危险, 无论目标速度如何都尝试后跳
 #define BAIT_LOST_SIGHT_GRACE           3.0    // 连续丢失目标视野超过该时间才退出 Bait
@@ -213,7 +211,7 @@ stock Action StateBait_OnUpdate(int client, int& buttons, float vel[3], float an
 
 /**
 * 当 Charger 距离目标距离小于 baitZoneMin 时, 若目标看着 Charger 那么 Charger 后退, 如果距离目标距离大于 baitZoneMax 那么前进继续接近目标
-* 后跳时保留远离目标的水平动量, 只在空中存在异常指向目标的速度 (如 Approach 最后一跳进入 BaitZone, 那么急停, 清除输入和当前速度)
+* 后跳时保留远离目标的水平动量; Approach 最后一跳带进博弈区时不急停, 这一跳按当前水平速度落地后再后跳
 * @param client Charger 客户端索引
 * @param target 目标客户端索引
 * @param dist 到目标的距离
@@ -258,12 +256,9 @@ Action maintainMeleeBaitDistance(int client, int target, float dist, bool visibl
             return Plugin_Changed;
         }
 
-        // 否则说明当前的速度不是由 BhopType_BaitRetreat 发起的, 可能是 Approach 的最后一跳在空中进入 BaitZone, 此时要急停, 清除输入和速度
-        currentVel[0] = 0.0;
-        currentVel[1] = 0.0;
-        TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, currentVel);
-        g_AiChargers[client].m_BhopType = BhopType_None;
-        g_AiChargers[client].m_flLastHopSpeed = 0.0;
+        // Approach 最后一跳带进博弈区: 玩家做不到空中把连跳速度瞬间清零, 保留水平动量让这一跳落地
+        if (getVectorLength2D(currentVel) > 1.0)
+            alignChargerFacingWithMovement(client, currentVel, ang);
         return Plugin_Changed;
     }
 
@@ -874,47 +869,34 @@ Action performBackwardBhop(int client, int target, bool visible, int& buttons, f
     /*
     * 使用目标到 Charger 的方向, 确保后跳严格远离目标, 不受当前 Charger 视角影响, 之前是使用 Charger 视角方向, 不够健壮
     */
-    static float pos[3], targetPos[3], vBack[3];
+    static float pos[3], targetPos[3], vBack[3], currentVel[3];
     GetClientAbsOrigin(client, pos);
     GetClientAbsOrigin(target, targetPos);
+    GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", currentVel);
     MakeVectorFromPoints(targetPos, pos, vBack);
     vBack[2] = 0.0;
 
     if (NormalizeVector(vBack, vBack) <= 0.0)
         return Plugin_Continue;
 
-    // 获取 runTopSpeed 作为基础速度
-    static float baseSpeed;
+    /*
+    * 后跳跟 Path / Direct 连跳同一套速度: 已有的远离分量留下, 朝目标飞来的速度在转身时丢掉,
+    * 再加落地加速度. 不再按生还者追速 × 1.2 凭空加到 400+, 普通玩家做不出那种后跳
+    */
+    static float baseSpeed, awaySpeed, backSpeed;
     baseSpeed = SDKCall(g_hSdkGetRunTopSpeed, client);
+    awaySpeed = GetVectorDotProduct(currentVel, vBack);
+    if (awaySpeed < 0.0)
+        awaySpeed = 0.0;
 
-    // 计算目标速度在 charger 后退方向上的投影, dot > 0 表示目标在追 charger, dot < 0 表示目标远离 charger
-    static float targetAbsVel[3], approachSpeed;
-    GetEntPropVector(target, Prop_Data, "m_vecAbsVelocity", targetAbsVel);
-    targetAbsVel[2] = 0.0;
-    approachSpeed = GetVectorDotProduct(targetAbsVel, vBack);
-    
-    // 计算 charger 需要的后退速度
-    static float backSpeed;
-    // backSpeed = baseSpeed + g_cvBhopImpulse.FloatValue;
-    backSpeed = baseSpeed;
-    if (approachSpeed > 0.0) {
-        backSpeed += approachSpeed * TARGET_PURSUIT_FACTOR;
-    } else {
-        // approachSpeed < 0, 目标远离 charger, 在 backSpeed 速度上叠加目标速度 (approachSpeed 是负数, 因此是减速), 减少距离
-        // 控制减速大小, 0.5 表示在 backSpeed 基础上减速目标速度的 50%
-        backSpeed += approachSpeed * TARGET_RETREAT_FACTOR;
-    }
-
-    // 限制最小后跳速度为 RunToSpeed, 最大后跳速度不超过设置的连跳速度上限
-    if (backSpeed < baseSpeed) {
+    backSpeed = awaySpeed;
+    if (backSpeed < baseSpeed)
         backSpeed = baseSpeed;
-    }
-    if (backSpeed > g_cvBhopMaxSpeed.FloatValue) {
-        backSpeed = g_cvBhopMaxSpeed.FloatValue;
-    }
+    backSpeed += AIPathMovement_GetHopImpulse(client, g_cvBhopImpulse.FloatValue, g_cvBhopFirstHopRatio.FloatValue);
 
-    // 应用缩放
     ScaleVector(vBack, backSpeed);
+    limitGroundBhopVel(vBack);
+    backSpeed = getVectorLength2D(vBack);
 
     // 连跳后退的落点不安全的时候, 则转为冲锋状态
     if (!nextTickPosCheck(client, vBack, visible)) {
