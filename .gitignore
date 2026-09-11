@@ -352,3 +352,4 @@ l4d2_blocklist.log
 logs/
 addons/sourcemod/data/dumps/
 addons/sourcemod/data/sqlite/
+stats.txt

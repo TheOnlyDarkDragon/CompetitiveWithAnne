@@ -1,7 +1,7 @@
 "AnneHappy"
 {
-	"2330"
+	"27015"
 	{
-		"servername"	"Anne电信测试服"
+		"servername"	"【CN】纯净对抗"
 	}	
 }
