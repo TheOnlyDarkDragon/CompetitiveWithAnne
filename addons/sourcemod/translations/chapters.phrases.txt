@@ -2,230 +2,287 @@
 {
 	"c1m1_hotel"
 	{
-		"en"		"1: Hotel"
+		"en"		"#L4D360UI_LevelName_COOP_C1M1"
+		"chi"		"#L4D360UI_LevelName_COOP_C1M1"
 	}
 	"c1m2_streets"
 	{
-		"en"		"2: Streets"
+		"en"		"#L4D360UI_LevelName_COOP_C1M2"
+		"chi"		"#L4D360UI_LevelName_COOP_C1M2"
 	}
 	"c1m3_mall"
 	{
-		"en"		"3: Mall"
+		"en"		"#L4D360UI_LevelName_COOP_C1M3"
+		"chi"		"#L4D360UI_LevelName_COOP_C1M3"
 	}
 	"c1m4_atrium"
 	{
-		"en"		"4: Atrium"
+		"en"		"#L4D360UI_LevelName_COOP_C1M4"
+		"chi"		"#L4D360UI_LevelName_COOP_C1M4"
 	}
 	"c2m1_highway"
 	{
-		"en"		"1: Highway"
+		"en"		"#L4D360UI_LevelName_COOP_C2M1"
+		"chi"		"#L4D360UI_LevelName_COOP_C2M1"
 	}
 	"c2m2_fairgrounds"
 	{
-		"en"		"2: Fairground"
+		"en"		"#L4D360UI_LevelName_COOP_C2M2"
+		"chi"		"#L4D360UI_LevelName_COOP_C2M2"
 	}
 	"c2m3_coaster"
 	{
-		"en"		"3: Coaster"
+		"en"		"#L4D360UI_LevelName_COOP_C2M3"
+		"chi"		"#L4D360UI_LevelName_COOP_C2M3"
 	}
 	"c2m4_barns"
 	{
-		"en"		"4: Barns"
+		"en"		"#L4D360UI_LevelName_COOP_C2M4"
+		"chi"		"#L4D360UI_LevelName_COOP_C2M4"
 	}
 	"c2m5_concert"
 	{
-		"en"		"5: Concert"
+		"en"		"#L4D360UI_LevelName_COOP_C2M5"
+		"chi"		"#L4D360UI_LevelName_COOP_C2M5"
 	}
 	"c3m1_plankcountry"
 	{
-		"en"		"1: Plank Country"
+		"en"		"#L4D360UI_LevelName_COOP_C3M1"
+		"chi"		"#L4D360UI_LevelName_COOP_C3M1"
 	}
 	"c3m2_swamp"
 	{
-		"en"		"2: Swamp"
+		"en"		"#L4D360UI_LevelName_COOP_C3M2"
+		"chi"		"#L4D360UI_LevelName_COOP_C3M2"
 	}
 	"c3m3_shantytown"
 	{
-		"en"		"3: Shanty Town"
+		"en"		"#L4D360UI_LevelName_COOP_C3M3"
+		"chi"		"#L4D360UI_LevelName_COOP_C3M3"
 	}
 	"c3m4_plantation"
 	{
-		"en"		"4: Plantation"
+		"en"		"#L4D360UI_LevelName_COOP_C3M4"
+		"chi"		"#L4D360UI_LevelName_COOP_C3M4"
 	}
 	"c4m1_milltown_a"
 	{
-		"en"		"1: Milltown"
+		"en"		"#L4D360UI_LevelName_COOP_C4M1"
+		"chi"		"#L4D360UI_LevelName_COOP_C4M1"
 	}
 	"c4m2_sugarmill_a"
 	{
-		"en"		"2: Sugar Mill"
+		"en"		"#L4D360UI_LevelName_COOP_C4M2"
+		"chi"		"#L4D360UI_LevelName_COOP_C4M2"
 	}
 	"c4m3_sugarmill_b"
 	{
-		"en"		"3: Mill Escape"
+		"en"		"#L4D360UI_LevelName_COOP_C4M3"
+		"chi"		"#L4D360UI_LevelName_COOP_C4M3"
 	}
 	"c4m4_milltown_b"
 	{
-		"en"		"4: Return to Town"
+		"en"		"#L4D360UI_LevelName_COOP_C4M4"
+		"chi"		"#L4D360UI_LevelName_COOP_C4M4"
 	}
 	"c4m5_milltown_escape"
 	{
-		"en"		"5: Town Escape"
+		"en"		"#L4D360UI_LevelName_COOP_C4M5"
+		"chi"		"#L4D360UI_LevelName_COOP_C4M5"
 	}
 	"c5m1_waterfront"
 	{
-		"en"		"1: Waterfront"
+		"en"		"#L4D360UI_LevelName_COOP_C5M1"
+		"chi"		"#L4D360UI_LevelName_COOP_C5M1"
 	}
 	"c5m2_park"
 	{
-		"en"		"2: Park"
+		"en"		"#L4D360UI_LevelName_COOP_C5M2"
+		"chi"		"#L4D360UI_LevelName_COOP_C5M2"
 	}
 	"c5m3_cemetery"
 	{
-		"en"		"3: Cemetery"
+		"en"		"#L4D360UI_LevelName_COOP_C5M3"
+		"chi"		"#L4D360UI_LevelName_COOP_C5M3"
 	}
 	"c5m4_quarter"
 	{
-		"en"		"4: Quarter"
+		"en"		"#L4D360UI_LevelName_COOP_C5M4"
+		"chi"		"#L4D360UI_LevelName_COOP_C5M4"
 	}
 	"c5m5_bridge"
 	{
-		"en"		"5: Bridge"
+		"en"		"#L4D360UI_LevelName_COOP_C5M5"
+		"chi"		"#L4D360UI_LevelName_COOP_C5M5"
 	}
 	"c6m1_riverbank"
 	{
-		"en"		"1: Riverbank"
+		"en"		"#L4D360UI_LevelName_COOP_C6M1"
+		"chi"		"#L4D360UI_LevelName_COOP_C6M1"
 	}
 	"c6m2_bedlam"
 	{
-		"en"		"2: Underground"
+		"en"		"#L4D360UI_LevelName_COOP_C6M2"
+		"chi"		"#L4D360UI_LevelName_COOP_C6M2"
 	}
 	"c6m3_port"
 	{
-		"en"		"3: Port"
+		"en"		"#L4D360UI_LevelName_COOP_C6M3"
+		"chi"		"#L4D360UI_LevelName_COOP_C6M3"
 	}
 	"c7m1_docks"
 	{
-		"en"		"1: Docks"
+		"en"		"#L4D360UI_LevelName_COOP_C7M1"
+		"chi"		"#L4D360UI_LevelName_COOP_C7M1"
 	}
 	"c7m2_barge"
 	{
-		"en"		"2: Barge"
+		"en"		"#L4D360UI_LevelName_COOP_C7M2"
+		"chi"		"#L4D360UI_LevelName_COOP_C7M2"
 	}
 	"c7m3_port"
 	{
-		"en"		"3: Port"
+		"en"		"#L4D360UI_LevelName_COOP_C7M3"
+		"chi"		"#L4D360UI_LevelName_COOP_C7M3"
 	}
 	"c8m1_apartment"
 	{
-		"en"		"1: The Apartments"
+		"en"		"#L4D360UI_LevelName_COOP_C8M1"
+		"chi"		"#L4D360UI_LevelName_COOP_C8M1"
 	}
 	"c8m2_subway"
 	{
-		"en"		"2: The Subway"
+		"en"		"#L4D360UI_LevelName_COOP_C8M2"
+		"chi"		"#L4D360UI_LevelName_COOP_C8M2"
 	}
 	"c8m3_sewers"
 	{
-		"en"		"3: The Sewer"
+		"en"		"#L4D360UI_LevelName_COOP_C8M3"
+		"chi"		"#L4D360UI_LevelName_COOP_C8M3"
 	}
 	"c8m4_interior"
 	{
-		"en"		"4: The Hospital"
+		"en"		"#L4D360UI_LevelName_COOP_C8M4"
+		"chi"		"#L4D360UI_LevelName_COOP_C8M4"
 	}
 	"c8m5_rooftop"
 	{
-		"en"		"5: Rooftop Finale"
+		"en"		"#L4D360UI_LevelName_COOP_C8M5"
+		"chi"		"#L4D360UI_LevelName_COOP_C8M5"
 	}
 	"c9m1_alleys"
 	{
-		"en"		"1: The Alleys"
+		"en"		"#L4D360UI_LevelName_COOP_C9M1"
+		"chi"		"#L4D360UI_LevelName_COOP_C9M1"
 	}
 	"c9m2_lots"
 	{
-		"en"		"2: The Truck Depot Finale"
+		"en"		"#L4D360UI_LevelName_COOP_C9M2"
+		"chi"		"#L4D360UI_LevelName_COOP_C9M2"
 	}
 	"c10m1_caves"
 	{
-		"en"		"1: The Turnpike"
+		"en"		"#L4D360UI_LevelName_COOP_C10M1"
+		"chi"		"#L4D360UI_LevelName_COOP_C10M1"
 	}
 	"c10m2_drainage"
 	{
-		"en"		"2: The Drains"
+		"en"		"#L4D360UI_LevelName_COOP_C10M2"
+		"chi"		"#L4D360UI_LevelName_COOP_C10M2"
 	}
 	"c10m3_ranchhouse"
 	{
-		"en"		"3: The Church"
+		"en"		"#L4D360UI_LevelName_COOP_C10M3"
+		"chi"		"#L4D360UI_LevelName_COOP_C10M3"
 	}
 	"c10m4_mainstreet"
 	{
-		"en"		"4: The Town"
+		"en"		"#L4D360UI_LevelName_COOP_C10M4"
+		"chi"		"#L4D360UI_LevelName_COOP_C10M4"
 	}
 	"c10m5_houseboat"
 	{
-		"en"		"5: Boathouse Finale"
+		"en"		"#L4D360UI_LevelName_COOP_C10M5"
+		"chi"		"#L4D360UI_LevelName_COOP_C10M5"
 	}
 	"c11m1_greenhouse"
 	{
-		"en"		"1: The Greenhouse"
+		"en"		"#L4D360UI_LevelName_COOP_C11M1"
+		"chi"		"#L4D360UI_LevelName_COOP_C11M1"
 	}
 	"c11m2_offices"
 	{
-		"en"		"2: The Crane"
+		"en"		"#L4D360UI_LevelName_COOP_C11M2"
+		"chi"		"#L4D360UI_LevelName_COOP_C11M2"
 	}
 	"c11m3_garage"
 	{
-		"en"		"3: The Construction Site"
+		"en"		"#L4D360UI_LevelName_COOP_C11M3"
+		"chi"		"#L4D360UI_LevelName_COOP_C11M3"
 	}
 	"c11m4_terminal"
 	{
-		"en"		"4: The Terminal"
+		"en"		"#L4D360UI_LevelName_COOP_C11M4"
+		"chi"		"#L4D360UI_LevelName_COOP_C11M4"
 	}
 	"c11m5_runway"
 	{
-		"en"		"5: Runway Finale"
+		"en"		"#L4D360UI_LevelName_COOP_C11M5"
+		"chi"		"#L4D360UI_LevelName_COOP_C11M5"
 	}
 	"c12m1_hilltop"
 	{
-		"en"		"1: The Woods"
+		"en"		"#L4D360UI_LevelName_COOP_C12M1"
+		"chi"		"#L4D360UI_LevelName_COOP_C12M1"
 	}
 	"c12m2_traintunnel"
 	{
-		"en"		"2: The Tunnel"
+		"en"		"#L4D360UI_LevelName_COOP_C12M2"
+		"chi"		"#L4D360UI_LevelName_COOP_C12M2"
 	}
 	"c12m3_bridge"
 	{
-		"en"		"3: The Bridge"
+		"en"		"#L4D360UI_LevelName_COOP_C12M3"
+		"chi"		"#L4D360UI_LevelName_COOP_C12M3"
 	}
 	"c12m4_barn"
 	{
-		"en"		"4: The Train Station"
+		"en"		"#L4D360UI_LevelName_COOP_C12M4"
+		"chi"		"#L4D360UI_LevelName_COOP_C12M4"
 	}
 	"c12m5_cornfield"
 	{
-		"en"		"5: Farmhouse Finale"
+		"en"		"#L4D360UI_LevelName_COOP_C12M5"
+		"chi"		"#L4D360UI_LevelName_COOP_C12M5"
 	}
 	"c13m1_alpinecreek"
 	{
-		"en"		"1: Alpine Creek"
+		"en"		"#L4D360UI_LevelName_COOP_C13M1"
+		"chi"		"#L4D360UI_LevelName_COOP_C13M1"
 	}
 	"c13m2_southpinestream"
 	{
-		"en"		"2: South Pine Stream"
+		"en"		"#L4D360UI_LevelName_COOP_C13M2"
+		"chi"		"#L4D360UI_LevelName_COOP_C13M2"
 	}
 	"c13m3_memorialbridge"
 	{
-		"en"		"3: Memorial Bridge"
+		"en"		"#L4D360UI_LevelName_COOP_C13M3"
+		"chi"		"#L4D360UI_LevelName_COOP_C13M3"
 	}
 	"c13m4_cutthroatcreek"
 	{
-		"en"		"4: Cut-throat Creek"
+		"en"		"#L4D360UI_LevelName_COOP_C13M4"
+		"chi"		"#L4D360UI_LevelName_COOP_C13M4"
 	}
 	"c14m1_junkyard"
 	{
-		"en"		"1: The Junkyard"
+		"en"		"#L4D360UI_LevelName_COOP_C14M1"
+		"chi"		"#L4D360UI_LevelName_COOP_C14M1"
 	}
 	"c14m2_lighthouse"
 	{
-		"en"		"2: Lighthouse Finale"
+		"en"		"#L4D360UI_LevelName_COOP_C14M2"
+		"chi"		"#L4D360UI_LevelName_COOP_C14M2"
 	}
 }
