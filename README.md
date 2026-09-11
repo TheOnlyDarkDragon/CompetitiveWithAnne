@@ -5,38 +5,35 @@
 > When running Linux ensure that your setup is running a minimum of **`GLIBC 2.35`** (Ubuntu 22.04 or higher) or you will run into issues loading certain extensions.  
 > This repository only supports Sourcemod **1.12** and up (which comes with the repository for ease of use)
 
+> [!重要]
+> 推荐使用Linux服务器来运行，尽管Windows也是可以的。
+> 如果你使用Linux运行服务器，确认你的GLIBC库版本不低于 GLIBC **`2.35`** (Ubuntu 22.04 或以上版本) ，否则你将一定会遇到 **`extensions`** 文件夹里面的拓展加载失败问题
+> 这个仓库只支持 Sourcemod **`1.12`** 或以上版本(该工具随仓库提供，使用方便便捷)
 ---
 
 > [!NOTE]
 > ConVar **`mv_maxplayers`** was added which replaces **`sv_maxplayers`** in **`cfg/server.cfg`**, this is used to prevent it from being overwritten every map change.  
 > On config unload, the value will be reset to the value used in the **`cfg/server.cfg`**.
 
+> [!通知]
+> 使用了ConVar **`mv_maxplayers`** 来替换 **`cfg/server.cfg`** 中的 ConVar **`sv_maxplayers`**，这是为了防止每次地图切换时最大人数被错误修改
+> 在卸载比赛模式配置时，它的值被重设为 **`cfg/server.cfg`** 中设定的值
+
 > [!NOTE]
 > Every confogl matchmode will now execute 2 additional files; **`cfg/sharedplugins.cfg`** and **`cfg/generalfixes.cfg`**.  
 > **`generalfixes.cfg`** contains all the crucial fixes that will be loaded in every matchmode.  
 > **`sharedplugins.cfg`** is for you, the server owner. You can load any custom plugin that you want to be loaded in every matchmode here.
 
+> [!通知]
+> 现在每个比赛模式会运行两个额外的文件: **`cfg/sharedplugins.cfg`** 和 **`cfg/generalfixes.cfg`**
+> **`generalfixes.cfg`** 包含了所有的关键性修复，并且会在所有的比赛模式中加载
+> **`sharedplugins.cfg`** 是为了你 服务器的所有者 而创建的。你可以在里面加载自定义的插件，这个文件会在所有的比赛模式中加载
+
 > [!CAUTION]
 > Plugin load locking and unlocking is no longer handled by the configs themselves, refrain from doing it manually or you can run into issues.
 
-## **About:**
-
-This project started off with a focus on reworking the very outdated platform for competitive L4D2.  
-In its current state it allows anyone to host their own up to date competitive L4D2 servers.
-
-> **Included Matchmodes:**
-
-* **Zonemod 2.9.1b**
-* **Zonemod Hunters**
-* **Zonemod Retro**
-* **NeoMod 0.4a**
-* **NextMod 1.0.5**
-* **Promod Elite 1.1**
-* **Acemod Revamped 1.2**
-* **Equilibrium 3.0c**
-* **Apex 1.1.2**
-
----
+> [!注意]
+> 插件加载的锁定与解锁功能不再由配置文件本身来处理，请不要手动进行此类操作，否则可能会引发问题
 
 ## **Download & Installation:**
 
@@ -67,6 +64,19 @@ In its current state it allows anyone to host their own up to date competitive L
 > ```
 >
 > Configure `MinidumpAccount` for the account that should own the reports. The Anne-specific configuration uses the maintainer's SteamID64 because AnneWeb displays reports to the matching Steam account.
+
+> [!重要]
+> 已配置过的 [`addons/sourcemod/configs/core.cfg`](addons/sourcemod/configs/core.cfg) 文件适用于Anne的私有服务器。其崩溃报告上传端点仅接受来自Anne的私有SourceBans允许列表中的公共IP。Anne的URL故意使用HTTP协议，因为随仓库附带的Accelerator/libcurl构建版本无法使用HTTPS协议；请勿使用这些私有URL。
+>
+> 如果您要在自己的服务器上部署此仓库，请不要使用Anne的私有上传端点。请使用Accelerator的官方崩溃报告、符号文件和二进制文件上传端点：
+> ```text
+> "MinidumpUrl" "http://crash.limetech.org/submit"
+> "MinidumpSymbolUrl" "http://crash.limetech.org/symbols/submit"
+> "MinidumpBinaryUrl" "http://crash.limetech.org/binary/submit"
+> ```
+>
+> 请为负责处理报告的账户配置MinidumpAccount。与Anne相关的配置需要使用维护者的SteamID64，因为AnneWeb会将报告显示给对应的Steam账户。
+
 
 ### Network quality reports
 
