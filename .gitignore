@@ -350,3 +350,5 @@ cfg/sourcemod/plugin.bequiet.cfg
 downloads/
 l4d2_blocklist.log
 logs/
+addons/sourcemod/data/dumps/
+addons/sourcemod/data/sqlite/
