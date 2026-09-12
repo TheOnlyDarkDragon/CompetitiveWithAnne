@@ -44,10 +44,6 @@
 	{
 		"ko"		"{lightgreen}생존자는 {green}!voteboss{lightgreen}를 사용해 Tank와 Witch의 출현 진행도를 변경할 수 있습니다."
 	}
-	"Advertisement_Donate"
-	{
-		"ko"		"{lightgreen}서버 관리자의 활동을 후원하려면 {green}!donate{lightgreen}를 입력하세요."
-	}
 	"Advertisement_ModToggle"
 	{
 		"ko"		"{green}서버 Mod 전환{lightgreen}은 {green}투표 메뉴{lightgreen}에서 사용할 수 있습니다."
