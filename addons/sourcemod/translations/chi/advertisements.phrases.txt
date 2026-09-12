@@ -44,10 +44,6 @@
 	{
 		"chi"		"{lightgreen}如果不想打某个进度的克，生还者可以使用 {green}!voteboss{lightgreen} 修改 Tank 和 Witch 进度。"
 	}
-	"Advertisement_Donate"
-	{
-		"chi"		"{lightgreen}如果欣赏腐竹的工作，输入 {green}!donate{lightgreen} 赞助服务器。"
-	}
 	"Advertisement_ModToggle"
 	{
 		"chi"		"{green}服务器 Mod 开关{lightgreen}可以在{green}投票菜单{lightgreen}中开启。"

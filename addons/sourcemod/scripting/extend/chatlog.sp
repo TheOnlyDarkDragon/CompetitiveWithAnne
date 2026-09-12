@@ -27,11 +27,6 @@ public void OnPluginStart()
 {
 	chatlog_clearTable = CreateConVar("sm_chatlog_cleartable_enabled", "1", "Enable/Disable clearing table (1/0)", 0, true, 0.0, true, 1.0);
 	chatlog_clearTableDuration = CreateConVar("sm_chatlog_cleartable_duration", "12 MONTH", "How often will table restart\n(TIME FUNCTIONS: https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html)");
-	AddCommandListener(Command_SponsorLog, "sm_donate");
-	AddCommandListener(Command_SponsorLog, "sm_wc");
-	AddCommandListener(Command_SponsorLog, "sm_wanchen");
-	AddCommandListener(Command_SponsorLog, "sm_finish");
-	AddCommandListener(Command_SponsorLog, "sm_wccancel");
 
 	AutoExecConfig(true, "chatlog");
 }
@@ -178,14 +173,6 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 	if (strlen(szArgs) > 0 && szArgs[0] != '!' && szArgs[0] != '/')
 		WriteChatLog(client, command, szArgs);
 
-	return Plugin_Continue;
-}
-
-public Action Command_SponsorLog(int client, const char[] command, int argc)
-{
-	char message[16];
-	FormatEx(message, sizeof(message), "!%s", command[3]);
-	WriteChatLog(client, "say", message);
 	return Plugin_Continue;
 }
 

@@ -48,12 +48,6 @@
 		"phrase"	"Advertisement_VoteBoss"
 		"text"		"{LIGHTGREEN}如果某个进度的克不想打，生还者可以使用命令 {GREEN}!voteboss{LIGHTGREEN} 修改Tank和Witch进度"
 	}
-	"9"
-	{
-		"type"		"S"
-		"phrase"	"Advertisement_Donate"
-		"text"		"{LIGHTGREEN}如果欣赏腐竹的工作，输入 {GREEN}!donate{LIGHTGREEN}赞助服务器"
-	}
 	"10"
 	{
 		"type"		"S"
