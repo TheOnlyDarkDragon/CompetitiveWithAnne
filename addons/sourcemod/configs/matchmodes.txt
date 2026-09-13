@@ -62,18 +62,11 @@
 			"name" "纯净死亡之门"
 		}
 	}
-	"BaoKang (包抗) Configs"
+	"包抗模式"
 	{
-		"baokang"
+		"mkv"
 		{
-			"name" "包抗模式（zm改）"
-		}
-	}
-	"Pure (纯净) Configs"
-	{
-		"pure"
-		{
-			"name" "包抗模式（原版改）"
+			"name" "进阶包抗(ZM改)"
 		}
 	}
 	"Not0721 Coop Profiles"
