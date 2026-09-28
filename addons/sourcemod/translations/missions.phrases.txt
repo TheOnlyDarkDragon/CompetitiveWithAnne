@@ -2,59 +2,73 @@
 {
 	"L4D2C1"
 	{
-		"en"		"Dead Center"
+		"en"		"#L4D360UI_CampaignName_C1"
+		"chi"		"#L4D360UI_CampaignName_C1"
 	}
 	"L4D2C2"
 	{
-		"en"		"Dark Carnival"
+		"en"		"#L4D360UI_CampaignName_C2"
+		"chi"		"#L4D360UI_CampaignName_C2"
 	}
 	"L4D2C3"
 	{
-		"en"		"Swamp Fever"
+		"en"		"#L4D360UI_CampaignName_C3"
+		"chi"		"#L4D360UI_CampaignName_C3"
 	}
 	"L4D2C4"
 	{
-		"en"		"Hard Rain"
+		"en"		"#L4D360UI_CampaignName_C4"
+		"chi"		"#L4D360UI_CampaignName_C4"
 	}
 	"L4D2C5"
 	{
-		"en"		"The Parish"
+		"en"		"#L4D360UI_CampaignName_C5"
+		"chi"		"#L4D360UI_CampaignName_C5"
 	}
 	"L4D2C6"
 	{
-		"en"		"The Passing"
+		"en"		"#L4D360UI_CampaignName_C6"
+		"chi"		"#L4D360UI_CampaignName_C6"
 	}
 	"L4D2C7"
 	{
-		"en"		"The Sacrifice"
+		"en"		"#L4D360UI_CampaignName_C7"
+		"chi"		"#L4D360UI_CampaignName_C7"
 	}
 	"L4D2C8"
 	{
-		"en"		"No Mercy"
+		"en"		"#L4D360UI_CampaignName_C8"
+		"chi"		"#L4D360UI_CampaignName_C8"
 	}
 	"L4D2C9"
 	{
-		"en"		"Crash Course"
+		"en"		"#L4D360UI_CampaignName_C9"
+		"chi"		"#L4D360UI_CampaignName_C9"
 	}
 	"L4D2C10"
 	{
-		"en"		"Death Toll"
+		"en"		"#L4D360UI_CampaignName_C10"
+		"chi"		"#L4D360UI_CampaignName_C10"
 	}
 	"L4D2C11"
 	{
-		"en"		"Dead Air"
+		"en"		"#L4D360UI_CampaignName_C11"
+		"chi"		"#L4D360UI_CampaignName_C11"
 	}
 	"L4D2C12"
 	{
-		"en"		"Blood Harvest"
+		"en"		"#L4D360UI_CampaignName_C12"
+		"chi"		"#L4D360UI_CampaignName_C12"
 	}
 	"L4D2C13"
 	{
-		"en"		"Cold Stream"
+		"en"		"#L4D360UI_CampaignName_C13"
+		"chi"		"#L4D360UI_CampaignName_C13"
 	}
 	"L4D2C14"
 	{
-		"en"		"The Last Stand"
+		"en"		"#L4D360UI_CampaignName_C14"
+		"chi"		"#L4D360UI_CampaignName_C14"
 	}
 	"Zengchengone"
 	{
@@ -279,5 +293,15 @@
 	"l4d2CrashBandicoot2"
 	{
 		"en"		"Crash Bandicoot Course 2"
+	}
+	"HoldoutChallenge"
+	{
+		"en"		"Holdout Challenge"
+		"chi"		"Holdout Challenge"
+	}
+	"HoldoutTraining"
+	{
+		"en"		"Holdout Training"
+		"chi"		"Holdout Training"
 	}
 }
