@@ -42,12 +42,6 @@
 		"phrase"	"Advertisement_CoopHealthReset"
 		"text"		"{GREEN}过关低于50血的都会恢复50血且重置状态，不用自杀"
 	}
-	"9"
-	{
-		"type"		"S"
-		"phrase"	"Advertisement_Donate"
-		"text"		"{LIGHTGREEN}如果欣赏腐竹的工作，输入 {GREEN}!donate{LIGHTGREEN}赞助服务器"
-	}
 	"10"
 	{
 		"type"		"S"

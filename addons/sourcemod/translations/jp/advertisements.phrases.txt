@@ -44,10 +44,6 @@
 	{
 		"jp"		"{lightgreen}生存者は {green}!voteboss{lightgreen} を使用して Tank と Witch の出現位置を変更できます。"
 	}
-	"Advertisement_Donate"
-	{
-		"jp"		"{lightgreen}サーバー管理者の活動を支援するには、{green}!donate{lightgreen} と入力してください。"
-	}
 	"Advertisement_ModToggle"
 	{
 		"jp"		"{green}サーバー Mod の切り替え{lightgreen}は{green}投票メニュー{lightgreen}から利用できます。"

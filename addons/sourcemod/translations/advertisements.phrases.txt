@@ -44,10 +44,6 @@
 	{
 		"en"		"{lightgreen}Survivors can use {green}!voteboss{lightgreen} to change the Tank and Witch spawn progress."
 	}
-	"Advertisement_Donate"
-	{
-		"en"		"{lightgreen}If you appreciate the server owner's work, type {green}!donate{lightgreen} to support the server."
-	}
 	"Advertisement_ModToggle"
 	{
 		"en"		"{green}Server mod toggles{lightgreen} are available in the {green}vote menu{lightgreen}."

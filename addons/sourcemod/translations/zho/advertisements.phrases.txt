@@ -44,10 +44,6 @@
 	{
 		"zho"		"{lightgreen}如果不想打某個進度的克，倖存者可以使用 {green}!voteboss{lightgreen} 修改 Tank 和 Witch 進度。"
 	}
-	"Advertisement_Donate"
-	{
-		"zho"		"{lightgreen}如果欣賞服主的工作，輸入 {green}!donate{lightgreen} 贊助伺服器。"
-	}
 	"Advertisement_ModToggle"
 	{
 		"zho"		"{green}伺服器 Mod 開關{lightgreen}可以在{green}投票選單{lightgreen}中開啟。"
