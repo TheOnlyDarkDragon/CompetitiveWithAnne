@@ -50,8 +50,8 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 ### 字段与推断规则
 
 - **权限**：直接取自 `RegAdminCmd` 的第三参数（`ADMFLAG_*`），`RegConsoleCmd` 默认无管理员 flag，`RegServerCmd` 为服务器控制台命令。
-- **语法/参数**：来自源码注册时给出的用法字符串与回调内 `GetCmdArg*` 的取参情况；源码未给用法且回调无法判断时写「源码未说明」。
-- **功能**：取自源码中注册描述或回调内的提示文本；凡源码描述为空、仅占位（如 `description`、`desc`）或语义不明处，一律写「源码未说明」，不做推测。
+- **语法/参数**：来自源码注册时给出的用法字符串与回调内 `GetCmdArg*` 的取参情况；源码未给用法时，按回调内 `GetCmdArg`/`GetCmdArgCount` 的实际取参情况推断，仍无法判断则明确给出推测与置信度，不再以“未给说明”一句收尾。
+- **功能**：优先取自源码中注册描述或回调内的提示文本；凡源码描述为空、仅占位（如 `description`、`desc`）或语义不明处，均回到源码分析（回调函数体、所调用的 native/SDKCall、读写的数据、相近命名的 ConVar、翻译文本）后给出「推测」，并在同一单元格内给出证据位置与置信度（高/中/低）。
 - **类型**：SourceMod 的 `CreateConVar` 不显式声明类型，下表按默认值与上下界的字面形式推断：全为整数记「整数」；取值恰为 0/1 记「开关」；含小数记「浮点」；非数值字面量（宏/变量）记「字符串或表达式」。
 - **取值范围**：来自 `CreateConVar` 第 5、7 参数（`hasMin` / `hasMax`）及其后的 min/max 数值；未提供上下界记「无上下界」。
 - **影响范围**：由该 ConVar 的创建标记（`FCVAR_*`）推出其生效范围（服务器端、是否复制到客户端、是否需 sv_cheats、是否写入 cfg 等）；其具体影响的行为见「作用」列。
@@ -373,7 +373,7 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 
 | 指令 | 语法/参数 | 权限 | 功能 | 来源 |
 |---|---|---|---|---|
-| `sm_afktest` | 无参数 | 需要 ADMFLAG_ROOT（z，最高权限） | 源码未说明（回调中仅调用 SDKCall，源码未给描述） | `survivor_afk_fix.sp:117` |
+| `sm_afktest` | 无参数 | 需要 ADMFLAG_ROOT（z，最高权限） | 源码未给描述；据 `duoren/survivor_afk_fix.sp:108-117` 的 `PrepSDKCall_SetFromConf(hGamedata, SDKConf_Signature, "CTerrorPlayer::GoAwayFromKeyboard")` 与 :123-131 回调 `AFKTEST` 中的 `SDKCall(hAFKSDKCall, client)`，推测为：调试命令，对指定玩家强制触发 `CTerrorPlayer::GoAwayFromKeyboard`（令其进入挂机/AFK 状态），用于验证本插件的 AFK 修复逻辑；另注意 :29 为 `#define DEBUG 0`，默认编译时该命令不会注册（置信度：高） | `survivor_afk_fix.sp:117` |
 
 ### ConVar
 
@@ -769,7 +769,7 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 | `sm_chenghao` | 无参数 | 无（任意玩家可用） | 打开称号选择菜单，sm_tagslist 的别名 | `hextags.sp:151` |
 | `sm_ch` | 无参数 | 无（任意玩家可用） | 打开称号选择菜单，短别名 | `hextags.sp:152` |
 | `sm_getteam` | 无参数 | 无（任意玩家可用） | 显示当前队伍名称 | `hextags.sp:153` |
-| `sm_gettagvars` | 无参数 | 无（任意玩家可用） | 源码未说明（源码未给描述，回调内无操作） | `hextags.sp:168` |
+| `sm_gettagvars` | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `extend/hextags.sp:167-170` 该命令注册在 `#if defined DEBUG` 块内，回调 `Cmd_GetVars`（:460-467）连续四次 `ReplyToCommand` 输出 `selectedTags[client]` 的 `ScoreTag`、`ChatTag`、`ChatColor`、`NameColor`，推测为：调试命令，把调用者当前选中的计分板标签、聊天前缀、聊天颜色、名字颜色四个变量值回显到控制台，用于排查标签为何不生效；:22 的 `//#define DEBUG 0` 仍处于被注释状态，故默认编译不会注册（置信度：高） | `hextags.sp:168` |
 | `sm_firesel` | 无参数 | 无（任意玩家可用） | 触发称号选择相关前向，源码仅给出触发参数 thistoggle | `hextags.sp:169` |
 
 ### ConVar
@@ -1575,7 +1575,7 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 | `rpg_antikick_min_immunity` | `0` | 整数，源码写作浮点 | 0.0 ~ 100.0 | 受保护阈值：管理员免疫等级大于等于该值即受保护，0 表示任意管理员都受保护 | 服务器端本插件逻辑 | `rpg.sp:1092` |
 | `rpg_antikick_equal_block` | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 同级免疫是否禁止互踢，仅对 sm_kick 生效 | 服务器端本插件逻辑 | `rpg.sp:1093` |
 | `rpg_allow_UseB` | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否允许消费 B 数，即价格大于 0 的商品：1 允许，0 仅允许 0B 商品 | 服务器端本插件逻辑 | `rpg.sp:1094` |
-| `ReturnBlood` | `0` | 整数 | 无上下界 | 回血模式（源码未说明具体取值含义） | 服务器端本插件逻辑 | `rpg.sp:1120` |
+| `ReturnBlood` | `0` | 整数 | 无上下界 | 击杀特感回血（源码描述只有“回血模式”四字）；据 `extend/rpg.sp:1120` 的 `CreateConVar("ReturnBlood", "0", "回血模式")`、:1079 把 `EventReturnBlood` 挂在 `player_death`（EventHookMode_Pre），:1303-1334 中当死者为特感(team 3)、攻击者为幸存者且 `GetConVarBool(ReturnBlood)` 为真时，把攻击者永久血量写回为「当前永久血量（`player[attacker].ClientBlood>0` 时再 +2）」并以 `m_iMaxHealth` 封顶（:1319-1330），:2477 为真时购买菜单追加“回血技能”项，`optional/AnneHappy/text.sp:256-261` 也按“>0”显示回血已开启，推测为：纯开关，0=关闭、非 0=开启（源码用 `GetConVarBool` 读取，不存在多档取值语义）（置信度：高） | 服务器端本插件逻辑 | `rpg.sp:1120` |
 
 ## rygive.sp（myinfo 缺 name，用文件名代替） —— `extend/rygive.sp`
 
@@ -1882,7 +1882,7 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 | `l4d2_playtime_apikey` | `C7B3FC46E6E6D5C87700963F0688FCB4` | 字符串或表达式 | 无上下界 | Steam 开发者 Web API key | 服务器端本插件逻辑；受保护 | `veterans.sp:112` |
 | `sm_veterans_enable` | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否启用 VeteransOnly 插件 | 服务器端本插件逻辑 | `veterans.sp:121` |
 | `sm_veterans_gameid` | `550` | 整数，源码写作浮点 | 0.0 ~ MAX_FLOAT | 要检查玩家游戏时长的游戏的 Steam 商店 id | 服务器端本插件逻辑 | `veterans.sp:127` |
-| `sm_veterans_excludegroupmemberplay` | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否排除 Steam 组成员，但描述语句不完整，源码未说明清楚 | 服务器端本插件逻辑 | `veterans.sp:133` |
+| `sm_veterans_excludegroupmemberplay` | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否让 Steam 组成员免除时长门槛；据 `extend/veterans.sp:133-138` 的英文描述原文「Should we let exclude group member but not rechach mititaion to play」（语法不通），配合 :242 `if(!HasEnoughPlaytime(player[Player].servertime) && player[Player].isGroupMember && !GetConVarBool(cvar_excludeGroupMemberPlay))` 命中时提示 `Veterans_PlayerDurationDetectionNotMeet` 并 `return Plugin_Stop` 拦截入队，以及 :404-415 两个分支的提示文本（`Veterans_PlayerDurationDetectionPlayerGame`=“…may play normally” 与 `Veterans_PlayerTimeDetectionPlayerGame`=“…may only spectate”，见 `translations/veterans.phrases.txt:46-52`），推测为：1=组成员即使时长不达标也可正常游玩（豁免时长限制），0=时长不达标的组成员只能旁观并被拒绝加入队伍（置信度：中） | 服务器端本插件逻辑 | `veterans.sp:133` |
 | `sm_veterans_excludereservedslots` | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否把拥有预留槽位的玩家排除在惩罚之外 | 服务器端本插件逻辑 | `veterans.sp:139` |
 | `sm_veterans_excludeprivileged` | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否把有权限的玩家排除在惩罚之外 | 服务器端本插件逻辑 | `veterans.sp:145` |
 | `sm_veterans_excludegroupmember` | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否把 Steam 组成员排除在惩罚之外 | 服务器端本插件逻辑 | `veterans.sp:151` |
@@ -4796,16 +4796,16 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 
 | 指令 | 语法/参数 | 权限 | 功能 | 来源 |
 |---|---|---|---|---|
-| `sm_xx` | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `text.sp:58` |
+| `sm_xx` | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/AnneHappy/text.sp:396-400` 回调 `InfectedStatus` 只调用 `printinfo(Client)`，:180-195 的 `printinfo` 再对该玩家调用 `PrintInfoToClient`，后者（:207-280）逐行输出坦克 Bhop 开关（:223-224）、当前武器配置档位（:226-228）、AI 难度、特感上限与刷新间隔（:240）以及刷怪距离/传送检查/回血/坦克消耗等 ConVar（:242-274），推测为：查询本局特感与插件配置状态的玩家命令（`sm_xx` 命名随意，实质等同 `sm_info`；`event_RoundStart` 开局用同一函数全服播报，:401-404）（置信度：高） | `text.sp:58` |
 | `sm_killall` | 无参数 | 需要 ADMFLAG_BAN（d，封禁） | 处死所有玩家 | `text.sp:64` |
 
 ### ConVar
 
 | ConVar | 默认值 | 类型 | 取值范围 | 作用 | 影响范围 | 来源 |
 |---|---|---|---|---|---|---|
-| `ZonemodWeapon` | `0` | 整数 | 无上下界 | 源码未说明（ConVar 名为 ZonemodWeapon，源码未给描述） | 服务器端本插件逻辑 | `text.sp:41` |
+| `ZonemodWeapon` | `0` | 整数 | 无上下界 | 整服配置档位开关；据 `optional/AnneHappy/text.sp:41` 的 `CreateConVar("ZonemodWeapon", "0", "", 0, false, 0.0, false, 0.0)`（描述为空字符串），:150-177 `CvarWeapon` 按值执行 `ServerCommand("exec vote/weapon/...cfg")`：1→`zonemod.cfg`、0→`AnneHappy.cfg`、2→特感上限≥10 或配置名含 Alone/1vHunters 时执行 `AnneHappyPlus.cfg`，否则回退成 0（:158-176），:226 又把它映射为显示名 `Weapon>1?"Anne+":(Weapon>0?"Zone":"Anne")`，推测为：切换整服武器/玩法配置风格，0=AnneHappy、1=Zonemod、2=AnneHappyPlus（置信度：高） | 服务器端本插件逻辑 | `text.sp:41` |
 | `AnnePluginVersion` | `Latest` | 字符串或表达式 | 无上下界 | Anne 插件版本 | 服务器端本插件逻辑 | `text.sp:42` |
-| `coopmode` | `0` | 整数 | 无上下界 | 源码未说明（ConVar 名为 coopmode，源码未给描述） | 服务器端本插件逻辑 | `text.sp:59` |
+| `coopmode` | `0` | 整数 | 无上下界 | 合作模式标记；据 `optional/AnneHappy/text.sp:59` 的 `CreateConVar("coopmode", "0")`（连描述参数都没有），全文唯一读取处在 :99-105 `Incap_Event`（钩子为 `player_incapacitated_start`/`player_incapacitated`，:60-61）：`if(GetConVarBool(g_hCvarCoop)) ForcePlayerSuicide(Incap);`，即被击倒的幸存者立即被处死，随后 :106-108 再按 `IsTeamImmobilised()` 决定是否全队处死，推测为：标记本局是否为合作(campaign)模式；1=倒地即死（跳过倒地挣扎/被救流程），0（默认，对抗）=保持原版倒地逻辑（置信度：中） | 服务器端本插件逻辑 | `text.sp:59` |
 
 ## Restore Blocked Vocalize —— `optional/AnneHappy/tls_restore_vocalize.sp`
 
@@ -5354,8 +5354,8 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 
 | ConVar | 默认值 | 类型 | 取值范围 | 作用 | 影响范围 | 来源 |
 |---|---|---|---|---|---|---|
-| `sm_hbonus_report` | `2` | 整数，源码写作浮点 | ≥ 0.0 | 源码未说明（ConVar 名为 sm_hbonus_report，源码未给描述） | 服务器端本插件逻辑 | `holdout_bonus.sp:123` |
-| `sm_hbonus_pointsmode` | `2` | 整数，源码写作浮点 | ≥ 0.0 | 源码未说明（ConVar 名为 sm_hbonus_pointsmode，源码未给描述） | 服务器端本插件逻辑 | `holdout_bonus.sp:130` |
+| `sm_hbonus_report` | `2` | 整数，源码写作浮点 | ≥ 0.0 | 奖励播报方式；源码其实已给描述（`optional/holdout_bonus.sp:123-128` 第 3 参数）：「The way the bonus is reported. 0: no report; 1: report only on round end; 2: also report after event; 3: also report when event starts; 4: only report on event end」——0=不播报、1=仅回合结束时播报、2=事件结束后也播报、3=事件开始时也播报、4=仅在事件结束时播报；同处 :125 的内联注释写的是「0: disable; 1: leave distance unchanged; 2: substract points from distance」，与下一条 `sm_hbonus_pointsmode` 的注释重复，疑为复制残留，以正式描述为准（置信度：高） | 服务器端本插件逻辑 | `holdout_bonus.sp:123` |
+| `sm_hbonus_pointsmode` | `2` | 整数，源码写作浮点 | ≥ 0.0 | 奖励计算方式；源码其实已给描述（`optional/holdout_bonus.sp:130-135` 第 3 参数）：「The way the holdout bonus is awarded. 0: disable; 1: leave distance unchanged; 2: substract points from distance.」——0=禁用、1=距离不变、2=从距离中扣除奖励分；:132 的内联注释与描述一致（置信度：高） | 服务器端本插件逻辑 | `holdout_bonus.sp:130` |
 | `sm_hbonus_configpath` | `configs/holdoutmapinfo.txt` | 字符串或表达式 | 无上下界 | 每张地图 Holdout 奖励设置所用的 holdoutmapinfo.txt KeyValues 文件路径 | 服务器端本插件逻辑 | `holdout_bonus.sp:137` |
 
 ## L4D2 Antibaiter —— `optional/l4d2_antibaiter.sp`
@@ -5756,10 +5756,10 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 
 | 指令 | 语法/参数 | 权限 | 功能 | 来源 |
 |---|---|---|---|---|
-| `sm_health` | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `l4d2_hybrid_scoremod.sp:96` |
-| `sm_damage` | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `l4d2_hybrid_scoremod.sp:97` |
-| `sm_bonus` | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `l4d2_hybrid_scoremod.sp:98` |
-| `sm_mapinfo` | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `l4d2_hybrid_scoremod.sp:99` |
+| `sm_health` | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/l4d2_hybrid_scoremod.sp:96-98` 三个命令全部注册到同一回调 `CmdBonus`（:209-246），该回调先取 `GetCmdArg(1)`，按 `full`（明细）/`lite`（单行）/无参（默认百分比）三种详略输出本队回血加成 HB、伤害加成 DB、药片加成 Pills 及其占上限百分比；回合结束后或由服务器控制台调用则不显示，推测为：“查看本队当前混合增分”的别名之一，与 `sm_damage`、`sm_bonus` 完全等价（命名分别对应加成的三个组成部分）（置信度：高） | `l4d2_hybrid_scoremod.sp:96` |
+| `sm_damage` | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/l4d2_hybrid_scoremod.sp:96-98` 三个命令全部注册到同一回调 `CmdBonus`（:209-246），该回调先取 `GetCmdArg(1)`，按 `full`（明细）/`lite`（单行）/无参（默认百分比）三种详略输出本队回血加成 HB、伤害加成 DB、药片加成 Pills 及其占上限百分比；回合结束后或由服务器控制台调用则不显示，推测为：“查看本队当前混合增分”的别名之一，与 `sm_damage`、`sm_bonus` 完全等价（命名分别对应加成的三个组成部分）（置信度：高） | `l4d2_hybrid_scoremod.sp:97` |
+| `sm_bonus` | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/l4d2_hybrid_scoremod.sp:96-98` 三个命令全部注册到同一回调 `CmdBonus`（:209-246），该回调先取 `GetCmdArg(1)`，按 `full`（明细）/`lite`（单行）/无参（默认百分比）三种详略输出本队回血加成 HB、伤害加成 DB、药片加成 Pills 及其占上限百分比；回合结束后或由服务器控制台调用则不显示，推测为：“查看本队当前混合增分”的别名之一，与 `sm_damage`、`sm_bonus` 完全等价（命名分别对应加成的三个组成部分）（置信度：高） | `l4d2_hybrid_scoremod.sp:98` |
+| `sm_mapinfo` | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/l4d2_hybrid_scoremod.sp:99` 注册到 `CmdMapInfo`（:248-267，回调体逐条 `CPrintToChat`）：输出队伍规模、地图距离、总分（含药片上限）、生命加成/伤害加成/药片加成各自上限与占比、平局加分，数据来自 `OnConfigsExecuted`（:119-139）中按 `sm2_bonus_per_survivor_multiplier`×人数×地图距离算出的 `fMapBonus` 等全局量，推测为：显示本张地图 ScoreMod 2 增分配置的说明命令（置信度：高） | `l4d2_hybrid_scoremod.sp:99` |
 
 ### ConVar
 
@@ -5781,10 +5781,10 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 
 | 指令 | 语法/参数 | 权限 | 功能 | 来源 |
 |---|---|---|---|---|
-| `sm_health` | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `l4d2_hybrid_scoremod_zone.sp:97` |
-| `sm_damage` | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `l4d2_hybrid_scoremod_zone.sp:98` |
-| `sm_bonus` | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `l4d2_hybrid_scoremod_zone.sp:99` |
-| `sm_mapinfo` | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `l4d2_hybrid_scoremod_zone.sp:100` |
+| `sm_health` | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/l4d2_hybrid_scoremod_zone.sp:97-100` 三个命令全部注册到同一回调 `CmdBonus`（:210-247），该回调先取 `GetCmdArg(1)`，按 `full`（明细）/`lite`（单行）/无参（默认百分比）三种详略输出本队回血加成 HB、伤害加成 DB、药片加成 Pills 及其占上限百分比；回合结束后或由服务器控制台调用则不显示，推测为：“查看本队当前混合增分”的别名之一，与 `sm_damage`、`sm_bonus` 完全等价（命名分别对应加成的三个组成部分）（置信度：高） | `l4d2_hybrid_scoremod_zone.sp:97` |
+| `sm_damage` | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/l4d2_hybrid_scoremod_zone.sp:97-100` 三个命令全部注册到同一回调 `CmdBonus`（:210-247），该回调先取 `GetCmdArg(1)`，按 `full`（明细）/`lite`（单行）/无参（默认百分比）三种详略输出本队回血加成 HB、伤害加成 DB、药片加成 Pills 及其占上限百分比；回合结束后或由服务器控制台调用则不显示，推测为：“查看本队当前混合增分”的别名之一，与 `sm_damage`、`sm_bonus` 完全等价（命名分别对应加成的三个组成部分）（置信度：高） | `l4d2_hybrid_scoremod_zone.sp:98` |
+| `sm_bonus` | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/l4d2_hybrid_scoremod_zone.sp:97-100` 三个命令全部注册到同一回调 `CmdBonus`（:210-247），该回调先取 `GetCmdArg(1)`，按 `full`（明细）/`lite`（单行）/无参（默认百分比）三种详略输出本队回血加成 HB、伤害加成 DB、药片加成 Pills 及其占上限百分比；回合结束后或由服务器控制台调用则不显示，推测为：“查看本队当前混合增分”的别名之一，与 `sm_damage`、`sm_bonus` 完全等价（命名分别对应加成的三个组成部分）（置信度：高） | `l4d2_hybrid_scoremod_zone.sp:99` |
+| `sm_mapinfo` | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/l4d2_hybrid_scoremod_zone.sp:100` 注册到 `CmdMapInfo`（:249-268，回调体逐条 `CPrintToChat`）：输出队伍规模、地图距离、总分（含药片上限）、生命加成/伤害加成/药片加成各自上限与占比、平局加分，数据来自 `OnConfigsExecuted`（:120-140）中按 `sm2_bonus_per_survivor_multiplier`×人数×地图距离算出的 `fMapBonus` 等全局量，推测为：显示本张地图 ScoreMod 2 增分配置的说明命令（置信度：高） | `l4d2_hybrid_scoremod_zone.sp:100` |
 
 ### ConVar
 
@@ -6152,8 +6152,8 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 |---|---|---|---|---|---|---|
 | `sm_stats_debug` | `0` | 整数，源码写作浮点 | ≥ 0.0 | 调试模式，最小 0 | 服务器端本插件逻辑 | `l4d2_playstats.sp:512` |
 | `sm_survivor_mvp_brevity_latest` | `4` | 整数，源码写作浮点 | ≥ 0.0 | MVP 聊天报告精简 flag：1 隐藏特感，2 隐藏普感，4 隐藏友伤，8 隐藏排名，32 隐藏百分比，64 隐藏绝对值 | 服务器端本插件逻辑 | `l4d2_playstats.sp:519` |
-| `sm_stats_autoprint_vs_round` | `8325` | 整数，源码写作浮点 | ≥ 0.0 | 源码未说明（ConVar 名为 sm_stats_autoprint_vs_round，源码未给描述） | 服务器端本插件逻辑 | `l4d2_playstats.sp:526` |
-| `sm_stats_autoprint_coop_round` | `1289` | 整数，源码写作浮点 | ≥ 0.0 | 源码未说明（ConVar 名为 sm_stats_autoprint_coop_round，源码未给描述） | 服务器端本插件逻辑 | `l4d2_playstats.sp:533` |
+| `sm_stats_autoprint_vs_round` | `8325` | 整数，源码写作浮点 | ≥ 0.0 | 对抗回合自动播报位标志；源码其实已给描述（`optional/l4d2_playstats.sp:526-531` 第 3 参数）：「Flags for automatic print [versus round] (show 1,4:MVP-chat, 4,8,16:MVP-console, 32,64:FF, 128,256:special, 512,1024,2048,4096:accuracy).」，:528 的内联注释进一步说明默认值 `8325 = 1(mvpchat) + 4(mvpcon-round) + 128(special round) + 8192(funfact round)`，即按位控制对抗模式下回合结束时自动打印哪些统计表（置信度：高） | 服务器端本插件逻辑 | `l4d2_playstats.sp:526` |
+| `sm_stats_autoprint_coop_round` | `1289` | 整数，源码写作浮点 | ≥ 0.0 | 合作(campaign)回合自动播报位标志；源码其实已给描述（`optional/l4d2_playstats.sp:533-538` 第 3 参数）：「Flags for automatic print [campaign round] (show 1,4:MVP-chat, 4,8,16:MVP-console, 32,64:FF, 128,256:special, 512,1024,2048,4096:accuracy).」，:535 的内联注释说明默认值 `1289 = 1(mvpchat) + 8(mvpcon-all) + 256(special all) + 1024(acc all)`，即按位控制合作模式下回合结束时自动打印哪些统计表（置信度：高） | 服务器端本插件逻辑 | `l4d2_playstats.sp:533` |
 | `sm_stats_showbots` | `1` | 整数，源码写作浮点 | ≥ 0.0 | 是否在所有表格中显示 Bot，0 表示仅在 MVP 与友伤表中显示 | 服务器端本插件逻辑 | `l4d2_playstats.sp:540` |
 | `sm_stats_percentdecimal` | `0` | 整数，源码写作浮点 | ≥ 0.0 | 是否在多数 MVP 百分比的控制台表格中显示一位小数 | 服务器端本插件逻辑 | `l4d2_playstats.sp:547` |
 | `sm_stats_writestats` | `0` | 整数，源码写作浮点 | ≥ 0.0 | 是否把统计数据写入 logs/ 目录：1 写 csv，2 写 csv 与格式化表格，仅对战模式 | 服务器端本插件逻辑 | `l4d2_playstats.sp:554` |
@@ -8382,7 +8382,7 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 | `confogl_waterslowdown` | Confogl's Competitive Mod | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否启用额外的水中减速 | `WaterSlowdown.sp:22` |
 | `coop_round_restart_delay` | coop_round_delay.sp（myinfo 缺 name，用文件名代替） | `2.0` | 整数，源码写作浮点 | ≥ 0.0 | 战役模式回合重开延迟时间，最小 0 | `coop_round_delay.sp:31` |
 | `coop_round_restart_delay_version` | coop_round_delay.sp（myinfo 缺 name，用文件名代替） | `PLUGIN_VERSION` | 字符串或表达式 | 无上下界 | 插件版本号（非行为配置） | `coop_round_delay.sp:29` |
-| `coopmode` | text.sp（myinfo 缺 name，用文件名代替） | `0` | 整数 | 无上下界 | 源码未说明（ConVar 名为 coopmode，源码未给描述） | `text.sp:59` |
+| `coopmode` | text.sp（myinfo 缺 name，用文件名代替） | `0` | 整数 | 无上下界 | 合作模式标记；据 `optional/AnneHappy/text.sp:59` 的 `CreateConVar("coopmode", "0")`（连描述参数都没有），全文唯一读取处在 :99-105 `Incap_Event`（钩子为 `player_incapacitated_start`/`player_incapacitated`，:60-61）：`if(GetConVarBool(g_hCvarCoop)) ForcePlayerSuicide(Incap);`，即被击倒的幸存者立即被处死，随后 :106-108 再按 `IsTeamImmobilised()` 决定是否全队处死，推测为：标记本局是否为合作(campaign)模式；1=倒地即死（跳过倒地挣扎/被救流程），0（默认，对抗）=保持原版倒地逻辑（置信度：中） | `text.sp:59` |
 | `crc_debug` | Checkpoint Rage Control | `0` | 整数，源码写作浮点 | 0.0 ~ 3.0 | 调试等级：0 关闭，1 启用，2 仅聊天，3 仅控制台 | `checkpoint-rage-control.sp:71` |
 | `crc_global` | Checkpoint Rage Control | `0` | 整数 | 无上下界 | 是否默认移除所有地图的安全区挫败感保留机制 | `checkpoint-rage-control.sp:70` |
 | `cssladders_allow_m2` | Ladder Rambos Dhooks [Merged] | `0` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否允许在梯子上推击：1 允许，0 禁止 | `l4d2_ladder_rambos.sp:119` |
@@ -9114,7 +9114,7 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 | `prop_touching_moveaway` | [L4D & 2] Prop Touching Rules | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否在触碰时推开中等重量道具 | `l4d_prop_touching_rules.sp:72` |
 | `punch_angle_toggle` | [L4D2] Punch Angle (RPG-aware, recoil command) | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否开启后坐力 | `punch_angle.sp:71` |
 | `punch_angle_version` | [L4D2] Punch Angle (RPG-aware, recoil command) | `PLUGIN_VERSION` | 字符串或表达式 | 无上下界 | 插件版本号（非行为配置） | `punch_angle.sp:61` |
-| `ReturnBlood` | 商店插件 | `0` | 整数 | 无上下界 | 回血模式（源码未说明具体取值含义） | `rpg.sp:1120` |
+| `ReturnBlood` | 商店插件 | `0` | 整数 | 无上下界 | 击杀特感回血（源码描述只有“回血模式”四字）；据 `extend/rpg.sp:1120` 的 `CreateConVar("ReturnBlood", "0", "回血模式")`、:1079 把 `EventReturnBlood` 挂在 `player_death`（EventHookMode_Pre），:1303-1334 中当死者为特感(team 3)、攻击者为幸存者且 `GetConVarBool(ReturnBlood)` 为真时，把攻击者永久血量写回为「当前永久血量（`player[attacker].ClientBlood>0` 时再 +2）」并以 `m_iMaxHealth` 封顶（:1319-1330），:2477 为真时购买菜单追加“回血技能”项，`optional/AnneHappy/text.sp:256-261` 也按“>0”显示回血已开启，推测为：纯开关，0=关闭、非 0=开启（源码用 `GetConVarBool` 读取，不存在多档取值语义）（置信度：高） | `rpg.sp:1120` |
 | `rm_allowed_rate_changes` | RateMonitor | `-1` | 整数 | 无上下界 | 单局内允许修改 rate 的次数，-1 表示不限 | `ratemonitor.sp:64` |
 | `rm_countermeasure` | RateMonitor | `2` | 整数，源码写作浮点 | 1.0 ~ 3.0 | 违规处理方式：1 聊天提醒，2 移到旁观，3 踢出 | `ratemonitor.sp:70` |
 | `rm_min_cmd` | RateMonitor | `20` | 整数 | 无上下界 | 允许的 cl_cmdrate 最小值，-1 表示不限 | `ratemonitor.sp:68` |
@@ -9292,8 +9292,8 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 | `SM_first_aid_heal_percent` | L4D2 Scoremod | `buf` | 字符串或表达式 | 无上下界 | 医疗包回复生命的百分比 | `l4d2_scoremod.sp:104` |
 | `sm_fixscreen_deferred_group_count` | [L4D & L4D2] Additive Staged FastDL | `8` | 整数，源码写作浮点 | 0.0 ~ float(MAX_DEFERRED_GROUPS) | 用于拆分延迟下载文件的分组数量，每次真实换图加入一组，0 表示关闭延迟下载 | `l4d2_blackscreen_fix.sp:52` |
 | `sm_hbonus_configpath` | Holdout Bonus | `configs/holdoutmapinfo.txt` | 字符串或表达式 | 无上下界 | 每张地图 Holdout 奖励设置所用的 holdoutmapinfo.txt KeyValues 文件路径 | `holdout_bonus.sp:137` |
-| `sm_hbonus_pointsmode` | Holdout Bonus | `2` | 整数，源码写作浮点 | ≥ 0.0 | 源码未说明（ConVar 名为 sm_hbonus_pointsmode，源码未给描述） | `holdout_bonus.sp:130` |
-| `sm_hbonus_report` | Holdout Bonus | `2` | 整数，源码写作浮点 | ≥ 0.0 | 源码未说明（ConVar 名为 sm_hbonus_report，源码未给描述） | `holdout_bonus.sp:123` |
+| `sm_hbonus_pointsmode` | Holdout Bonus | `2` | 整数，源码写作浮点 | ≥ 0.0 | 奖励计算方式；源码其实已给描述（`optional/holdout_bonus.sp:130-135` 第 3 参数）：「The way the holdout bonus is awarded. 0: disable; 1: leave distance unchanged; 2: substract points from distance.」——0=禁用、1=距离不变、2=从距离中扣除奖励分；:132 的内联注释与描述一致（置信度：高） | `holdout_bonus.sp:130` |
+| `sm_hbonus_report` | Holdout Bonus | `2` | 整数，源码写作浮点 | ≥ 0.0 | 奖励播报方式；源码其实已给描述（`optional/holdout_bonus.sp:123-128` 第 3 参数）：「The way the bonus is reported. 0: no report; 1: report only on round end; 2: also report after event; 3: also report when event starts; 4: only report on event end」——0=不播报、1=仅回合结束时播报、2=事件结束后也播报、3=事件开始时也播报、4=仅在事件结束时播报；同处 :125 的内联注释写的是「0: disable; 1: leave distance unchanged; 2: substract points from distance」，与下一条 `sm_hbonus_pointsmode` 的注释重复，疑为复制残留，以正式描述为准（置信度：高） | `holdout_bonus.sp:123` |
 | `SM_healthbonusratio` | L4D2 Scoremod | `2.0` | 浮点 | 0.25 ~ 5.0 | 生命奖励倍率，范围 0.25~5 | `l4d2_scoremod.sp:83` |
 | `sm_hextags_enable_tagslist` | hextags | `1` | 整数 | 无上下界 | 为 1 时启用 sm_tagslist 命令 | `hextags.sp:141` |
 | `sm_hextags_roundend` | hextags | `0` | 整数 | 无上下界 | 为 1 时回合结束也重新加载称号 | `hextags.sp:140` |
@@ -9454,8 +9454,8 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 | `sm_srvcln_sprays` | Server Clean Up | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 源码描述仅为 desc，未说明具体行为 | `servercleanup.sp:147` |
 | `sm_srvcln_sprays_time` | Server Clean Up | `168` | 整数，源码写作浮点 | ≥ -1.0 | 源码描述仅为 desc，未说明具体行为 | `servercleanup.sp:159` |
 | `sm_srvcln_version` | Server Clean Up | `PLUGIN_VERSION` | 字符串或表达式 | 无上下界 | 源码描述仅为 desc，未说明具体行为 | `servercleanup.sp:117` |
-| `sm_stats_autoprint_coop_round` | Player Statistics | `1289` | 整数，源码写作浮点 | ≥ 0.0 | 源码未说明（ConVar 名为 sm_stats_autoprint_coop_round，源码未给描述） | `l4d2_playstats.sp:533` |
-| `sm_stats_autoprint_vs_round` | Player Statistics | `8325` | 整数，源码写作浮点 | ≥ 0.0 | 源码未说明（ConVar 名为 sm_stats_autoprint_vs_round，源码未给描述） | `l4d2_playstats.sp:526` |
+| `sm_stats_autoprint_coop_round` | Player Statistics | `1289` | 整数，源码写作浮点 | ≥ 0.0 | 合作(campaign)回合自动播报位标志；源码其实已给描述（`optional/l4d2_playstats.sp:533-538` 第 3 参数）：「Flags for automatic print [campaign round] (show 1,4:MVP-chat, 4,8,16:MVP-console, 32,64:FF, 128,256:special, 512,1024,2048,4096:accuracy).」，:535 的内联注释说明默认值 `1289 = 1(mvpchat) + 8(mvpcon-all) + 256(special all) + 1024(acc all)`，即按位控制合作模式下回合结束时自动打印哪些统计表（置信度：高） | `l4d2_playstats.sp:533` |
+| `sm_stats_autoprint_vs_round` | Player Statistics | `8325` | 整数，源码写作浮点 | ≥ 0.0 | 对抗回合自动播报位标志；源码其实已给描述（`optional/l4d2_playstats.sp:526-531` 第 3 参数）：「Flags for automatic print [versus round] (show 1,4:MVP-chat, 4,8,16:MVP-console, 32,64:FF, 128,256:special, 512,1024,2048,4096:accuracy).」，:528 的内联注释进一步说明默认值 `8325 = 1(mvpchat) + 4(mvpcon-round) + 128(special round) + 8192(funfact round)`，即按位控制对抗模式下回合结束时自动打印哪些统计表（置信度：高） | `l4d2_playstats.sp:526` |
 | `sm_stats_debug` | Player Statistics | `0` | 整数，源码写作浮点 | ≥ 0.0 | 调试模式，最小 0 | `l4d2_playstats.sp:512` |
 | `sm_stats_percentdecimal` | Player Statistics | `0` | 整数，源码写作浮点 | ≥ 0.0 | 是否在多数 MVP 百分比的控制台表格中显示一位小数 | `l4d2_playstats.sp:547` |
 | `sm_stats_resetnextmap` | Player Statistics | `0` | 整数，源码写作浮点 | ≥ 0.0 | 是否忽略第一回合，配合 confogl 与比赛投票使用，换图后自动取消 | `l4d2_playstats.sp:561` |
@@ -9484,7 +9484,7 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 | `sm_veterans_enable` | VeteransOnly | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否启用 VeteransOnly 插件 | `veterans.sp:121` |
 | `sm_veterans_excludegroupmember` | VeteransOnly | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否把 Steam 组成员排除在惩罚之外 | `veterans.sp:151` |
 | `sm_veterans_excludegroupmembercount` | VeteransOnly | `2` | 整数，源码写作浮点 | 0.0 ~ MAX_FLOAT | 应从前多少个 sv_steamgroup 组中排除玩家，0 检查所有配置的组 | `veterans.sp:157` |
-| `sm_veterans_excludegroupmemberplay` | VeteransOnly | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否排除 Steam 组成员，但描述语句不完整，源码未说明清楚 | `veterans.sp:133` |
+| `sm_veterans_excludegroupmemberplay` | VeteransOnly | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否让 Steam 组成员免除时长门槛；据 `extend/veterans.sp:133-138` 的英文描述原文「Should we let exclude group member but not rechach mititaion to play」（语法不通），配合 :242 `if(!HasEnoughPlaytime(player[Player].servertime) && player[Player].isGroupMember && !GetConVarBool(cvar_excludeGroupMemberPlay))` 命中时提示 `Veterans_PlayerDurationDetectionNotMeet` 并 `return Plugin_Stop` 拦截入队，以及 :404-415 两个分支的提示文本（`Veterans_PlayerDurationDetectionPlayerGame`=“…may play normally” 与 `Veterans_PlayerTimeDetectionPlayerGame`=“…may only spectate”，见 `translations/veterans.phrases.txt:46-52`），推测为：1=组成员即使时长不达标也可正常游玩（豁免时长限制），0=时长不达标的组成员只能旁观并被拒绝加入队伍（置信度：中） | `veterans.sp:133` |
 | `sm_veterans_excludeprivileged` | VeteransOnly | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否把有权限的玩家排除在惩罚之外 | `veterans.sp:145` |
 | `sm_veterans_excludereservedslots` | VeteransOnly | `1` | 开关 0 或 1 | 0.0 ~ 1.0 | 是否把拥有预留槽位的玩家排除在惩罚之外 | `veterans.sp:139` |
 | `sm_veterans_gameid` | VeteransOnly | `550` | 整数，源码写作浮点 | 0.0 ~ MAX_FLOAT | 要检查玩家游戏时长的游戏的 Steam 商店 id | `veterans.sp:127` |
@@ -9583,7 +9583,7 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 | `z_leap_interval_post_ledge_hang` | L4D2 Jockey Ledge Hang Recharge | `10` | 整数 | 无上下界 | Jockey 挂边后再次跳跃前的等待秒数 | `l4d_jockey_ledgehang.sp:25` |
 | `z_pounce_damage_range_max` | Skill Detection (skeets, crowns, levels) | `1000.0` | 整数，源码写作浮点 | ≥ 0.0 | 源码说明：本服务器没有该 cvar，由 l4d2_skill_detect 添加 | `l4d2_skill_detect.sp:531` |
 | `z_pounce_damage_range_min` | Skill Detection (skeets, crowns, levels) | `300.0` | 整数，源码写作浮点 | ≥ 0.0 | 源码说明：本服务器没有该 cvar，由 l4d2_skill_detect 添加 | `l4d2_skill_detect.sp:533` |
-| `ZonemodWeapon` | text.sp（myinfo 缺 name，用文件名代替） | `0` | 整数 | 无上下界 | 源码未说明（ConVar 名为 ZonemodWeapon，源码未给描述） | `text.sp:41` |
+| `ZonemodWeapon` | text.sp（myinfo 缺 name，用文件名代替） | `0` | 整数 | 无上下界 | 整服配置档位开关；据 `optional/AnneHappy/text.sp:41` 的 `CreateConVar("ZonemodWeapon", "0", "", 0, false, 0.0, false, 0.0)`（描述为空字符串），:150-177 `CvarWeapon` 按值执行 `ServerCommand("exec vote/weapon/...cfg")`：1→`zonemod.cfg`、0→`AnneHappy.cfg`、2→特感上限≥10 或配置名含 Alone/1vHunters 时执行 `AnneHappyPlus.cfg`，否则回退成 0（:158-176），:226 又把它映射为显示名 `Weapon>1?"Anne+":(Weapon>0?"Zone":"Anne")`，推测为：切换整服武器/玩法配置风格，0=AnneHappy、1=Zonemod、2=AnneHappyPlus（置信度：高） | `text.sp:41` |
 
 ### 全部指令（按名称排序，共 485 条）
 
@@ -9649,7 +9649,7 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 | `sm_adminrates` | Lightweight Spectating (merged+128+force-spec) | 无参数 | 需要 ADMFLAG_GENERIC（b，通用管理员） | 管理员手动提升，对局 128 tick、旁观 100 tick | `specrates.sp:122` |
 | `sm_advertisements_reload` | Advertisements | 无参数 | 服务器控制台命令，玩家无法使用 | 重新加载广告配置，服务器控制台命令 | `advertisements.sp:76` |
 | `sm_afk` | simple join | 无参数 | 无（任意玩家可用） | sm_away 的别名 | `join.sp:116` |
-| `sm_afktest` | [L4D2]Survivor_AFK_Fix | 无参数 | 需要 ADMFLAG_ROOT（z，最高权限） | 源码未说明（回调中仅调用 SDKCall，源码未给描述） | `survivor_afk_fix.sp:117` |
+| `sm_afktest` | [L4D2]Survivor_AFK_Fix | 无参数 | 需要 ADMFLAG_ROOT（z，最高权限） | 源码未给描述；据 `duoren/survivor_afk_fix.sp:108-117` 的 `PrepSDKCall_SetFromConf(hGamedata, SDKConf_Signature, "CTerrorPlayer::GoAwayFromKeyboard")` 与 :123-131 回调 `AFKTEST` 中的 `SDKCall(hAFKSDKCall, client)`，推测为：调试命令，对指定玩家强制触发 `CTerrorPlayer::GoAwayFromKeyboard`（令其进入挂机/AFK 状态），用于验证本插件的 AFK 修复逻辑；另注意 :29 为 `#define DEBUG 0`，默认编译时该命令不会注册（置信度：高） | `survivor_afk_fix.sp:117` |
 | `sm_aidiff` | AnneHappy Dynamic AI Difficulty | <0 至 6> | 需要 ADMFLAG_CONFIG（h，服务器配置） | 设置动态难度：0 自动，1 简单，2 普通，3 困难，4 专家，5 极限，6 音理 | `annehappy_dynamic_ai_difficulty.sp:125` |
 | `sm_aidiff_reload` | AnneHappy Dynamic AI Difficulty | 无参数 | 需要 ADMFLAG_CONFIG（h，服务器配置） | 重新读取难度配置并应用当前难度 | `annehappy_dynamic_ai_difficulty.sp:126` |
 | `sm_aippm` | AnneHappy Dynamic AI Difficulty | 无参数 | 无（任意玩家可用） | 显示当前 AnneHappy 动态难度与 PPM | `annehappy_dynamic_ai_difficulty.sp:124` |
@@ -9679,8 +9679,8 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 | `sm_blocklimit` | l4d2_blacklist.sp（myinfo 缺 name，用文件名代替） | 无参数 | 无（任意玩家可用） | 查看自己的屏蔽上限 | `l4d2_blacklist.sp:239` |
 | `sm_blocklist` | l4d2_blacklist.sp（myinfo 缺 name，用文件名代替） | [目标玩家或 steam64 或名字] | 无（任意玩家可用） | 查看自己或指定玩家的屏蔽列表 | `l4d2_blacklist.sp:238` |
 | `sm_bonus` | Confogl's Competitive Mod | 无参数 | 无（任意玩家可用） | 在聊天中报告当前回合奖励，sm_health 的别名 | `ScoreMod.sp:96` |
-| `sm_bonus` | L4D2 Scoremod+ | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `l4d2_hybrid_scoremod.sp:98` |
-| `sm_bonus` | L4D2 Scoremod+ | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `l4d2_hybrid_scoremod_zone.sp:99` |
+| `sm_bonus` | L4D2 Scoremod+ | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/l4d2_hybrid_scoremod.sp:96-98` 三个命令全部注册到同一回调 `CmdBonus`（:209-246），该回调先取 `GetCmdArg(1)`，按 `full`（明细）/`lite`（单行）/无参（默认百分比）三种详略输出本队回血加成 HB、伤害加成 DB、药片加成 Pills 及其占上限百分比；回合结束后或由服务器控制台调用则不显示，推测为：“查看本队当前混合增分”的别名之一，与 `sm_damage`、`sm_bonus` 完全等价（命名分别对应加成的三个组成部分）（置信度：高） | `l4d2_hybrid_scoremod.sp:98` |
+| `sm_bonus` | L4D2 Scoremod+ | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/l4d2_hybrid_scoremod_zone.sp:97-100` 三个命令全部注册到同一回调 `CmdBonus`（:210-247），该回调先取 `GetCmdArg(1)`，按 `full`（明细）/`lite`（单行）/无参（默认百分比）三种详略输出本队回血加成 HB、伤害加成 DB、药片加成 Pills 及其占上限百分比；回合结束后或由服务器控制台调用则不显示，推测为：“查看本队当前混合增分”的别名之一，与 `sm_damage`、`sm_bonus` 完全等价（命名分别对应加成的三个组成部分）（置信度：高） | `l4d2_hybrid_scoremod_zone.sp:99` |
 | `sm_bonus` | Penalty bonus system | 无参数 | 无（任意玩家可用） | 显示本回合当前的额外奖励 | `l4d2_penalty_bonus.sp:117` |
 | `sm_boss` | L4D2 Tank Control | 无参数 | 无（任意玩家可用） | sm_tank 的别名 | `l4d_tank_control_eq.sp:85` |
 | `sm_boss` | [L4D2] Boss Percents/Vote Boss Hybrid | 无参数 | 无（任意玩家可用） | 显示 boss 刷新百分比 | `l4d_boss_percent.sp:105` |
@@ -9720,8 +9720,8 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 | `sm_cvar_test` | [ANY] Command and ConVar - Buffer Overflow Fixer | 无参数 | 需要 ADMFLAG_ROOT（z，最高权限） | 创建一个测试 ConVar 并输出其结果，用于缓冲区溢出修复验证 | `command_buffer.sp:153` |
 | `sm_cz` | hextags | 无参数 | 无（任意玩家可用） | 重新加载 HexTags 配置，sm_reloadtags 的别名 | `hextags.sp:149` |
 | `sm_da_recalc` | L4D2 Dynamic Ammo (dirspawn only) | 无参数 | 需要 ADMFLAG_GENERIC（b，通用管理员） | 手动重算並应用动态弹药倍率 | `l4d2_dynamic_ammo.sp:235` |
-| `sm_damage` | L4D2 Scoremod+ | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `l4d2_hybrid_scoremod.sp:97` |
-| `sm_damage` | L4D2 Scoremod+ | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `l4d2_hybrid_scoremod_zone.sp:98` |
+| `sm_damage` | L4D2 Scoremod+ | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/l4d2_hybrid_scoremod.sp:96-98` 三个命令全部注册到同一回调 `CmdBonus`（:209-246），该回调先取 `GetCmdArg(1)`，按 `full`（明细）/`lite`（单行）/无参（默认百分比）三种详略输出本队回血加成 HB、伤害加成 DB、药片加成 Pills 及其占上限百分比；回合结束后或由服务器控制台调用则不显示，推测为：“查看本队当前混合增分”的别名之一，与 `sm_damage`、`sm_bonus` 完全等价（命名分别对应加成的三个组成部分）（置信度：高） | `l4d2_hybrid_scoremod.sp:97` |
+| `sm_damage` | L4D2 Scoremod+ | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/l4d2_hybrid_scoremod_zone.sp:97-100` 三个命令全部注册到同一回调 `CmdBonus`（:210-247），该回调先取 `GetCmdArg(1)`，按 `full`（明细）/`lite`（单行）/无参（默认百分比）三种详略输出本队回血加成 HB、伤害加成 DB、药片加成 Pills 及其占上限百分比；回合结束后或由服务器控制台调用则不显示，推测为：“查看本队当前混合增分”的别名之一，与 `sm_damage`、`sm_bonus` 完全等价（命名分别对应加成的三个组成部分）（置信度：高） | `l4d2_hybrid_scoremod_zone.sp:98` |
 | `sm_dance` | SM Fortnite Emotes Extended | 无参数 | 无（任意玩家可用） | 打开舞蹈菜单，sm_dances 的别名 | `fornite_l4d.sp:96` |
 | `sm_dances` | SM Fortnite Emotes Extended | 无参数 | 无（任意玩家可用） | 打开舞蹈菜单，是否可用由 sm_dances_admin_flag_menu 控制 | `fornite_l4d.sp:95` |
 | `sm_decrease_specspeed` | Caster Assister | 无参数 | 无（任意玩家可用） | 降低旁观速度 | `caster_assister.sp:30` |
@@ -9763,7 +9763,7 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 | `sm_fwitch` | [L4D2] Vote Boss | <百分比> | 需要 ADMFLAG_BAN（d，封禁） | 管理员强制设置女巫刷新百分比 | `l4d_boss_vote.sp:50` |
 | `sm_get_restricted_strings` | [L4D & L4D2] Additive Staged FastDL | 无参数 | 需要 ADMFLAG_ROOT（z，最高权限） | 列出玩家首次连接时会加入的受限文件清单 | `l4d2_blackscreen_fix.sp:63` |
 | `sm_getstatusrates` | Lightweight Spectating Test | <玩家> | 需要 ADMFLAG_GENERIC（b，通用管理员） | 查询指定玩家的旁观 tick 状态 | `specrates_test.sp:52` |
-| `sm_gettagvars` | hextags | 无参数 | 无（任意玩家可用） | 源码未说明（源码未给描述，回调内无操作） | `hextags.sp:168` |
+| `sm_gettagvars` | hextags | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `extend/hextags.sp:167-170` 该命令注册在 `#if defined DEBUG` 块内，回调 `Cmd_GetVars`（:460-467）连续四次 `ReplyToCommand` 输出 `selectedTags[client]` 的 `ScoreTag`、`ChatTag`、`ChatColor`、`NameColor`，推测为：调试命令，把调用者当前选中的计分板标签、聊天前缀、聊天颜色、名字颜色四个变量值回显到控制台，用于排查标签为何不生效；:22 的 `//#define DEBUG 0` 仍处于被注释状态，故默认编译不会注册（置信度：高） | `hextags.sp:168` |
 | `sm_getteam` | hextags | 无参数 | 无（任意玩家可用） | 显示当前队伍名称 | `hextags.sp:153` |
 | `sm_give_starting_items` | Starting Items | 无参数 | 需要 ADMFLAG_KICK（c，踢出） | 立即给生还者发放起始物品 | `starting_items.sp:56` |
 | `sm_givetank` | L4D2 Tank Control | <玩家> | 需要 ADMFLAG_SLAY（f，处死） | 把坦克交给指定玩家 | `l4d_tank_control_eq.sp:81` |
@@ -9802,8 +9802,8 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 | `sm_hbonus` | Holdout Bonus | 无参数 | 无（任意玩家可用） | 显示当前 Holdout 奖励 | `holdout_bonus.sp:147` |
 | `sm_health` | Confogl's Competitive Mod | 无参数 | 无（任意玩家可用） | 在聊天中报告当前生还者平均血量与回合奖励 | `ScoreMod.sp:95` |
 | `sm_health` | L4D2 Scoremod | 无参数 | 无（任意玩家可用） | 显示当前生还者平均血量与回合奖励 | `l4d2_scoremod.sp:127` |
-| `sm_health` | L4D2 Scoremod+ | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `l4d2_hybrid_scoremod.sp:96` |
-| `sm_health` | L4D2 Scoremod+ | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `l4d2_hybrid_scoremod_zone.sp:97` |
+| `sm_health` | L4D2 Scoremod+ | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/l4d2_hybrid_scoremod.sp:96-98` 三个命令全部注册到同一回调 `CmdBonus`（:209-246），该回调先取 `GetCmdArg(1)`，按 `full`（明细）/`lite`（单行）/无参（默认百分比）三种详略输出本队回血加成 HB、伤害加成 DB、药片加成 Pills 及其占上限百分比；回合结束后或由服务器控制台调用则不显示，推测为：“查看本队当前混合增分”的别名之一，与 `sm_damage`、`sm_bonus` 完全等价（命名分别对应加成的三个组成部分）（置信度：高） | `l4d2_hybrid_scoremod.sp:96` |
+| `sm_health` | L4D2 Scoremod+ | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/l4d2_hybrid_scoremod_zone.sp:97-100` 三个命令全部注册到同一回调 `CmdBonus`（:210-247），该回调先取 `GetCmdArg(1)`，按 `full`（明细）/`lite`（单行）/无参（默认百分比）三种详略输出本队回血加成 HB、伤害加成 DB、药片加成 Pills 及其占上限百分比；回合结束后或由服务器控制台调用则不显示，推测为：“查看本队当前混合增分”的别名之一，与 `sm_damage`、`sm_bonus` 完全等价（命名分别对应加成的三个组成部分）（置信度：高） | `l4d2_hybrid_scoremod_zone.sp:97` |
 | `sm_hide` | Pause plugin | 无参数 | 无（任意玩家可用） | 显示被隐藏的暂停面板 | `pause.sp:142` |
 | `sm_hitsound_reload` | L4D2 Hit/Kill Feedback Plus | 无参数 | 需要 ADMFLAG_ROOT（z，最高权限） | 重新从数据库与 KV 读取所有在线玩家的偏好 | `l4d2_hitsound.sp:774` |
 | `sm_hud` | l4d2_scripted_hud.sp（myinfo 缺 name，用文件名代替） | 无参数 | 无（任意玩家可用） | 打开脚本化 HUD 设置菜单，sm_hudmenu 的别名 | `l4d2_scripted_hud.sp:901` |
@@ -9854,8 +9854,8 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 | `sm_loss` | Network Quality Hint | 无参数 | 无（任意玩家可用） | sm_net 的别名 | `network_quality_hint.sp:119` |
 | `sm_louis` | survivor_chat_select.sp（myinfo 缺 name，用文件名代替） | 无参数 | 无（任意玩家可用） | 把自己使用的生还者切换为 Louis | `survivor_chat_select.sp:86` |
 | `sm_manualmixmap` | l4d2_mixmap | <地图顺序> | 需要 ADMFLAG_ROOT（z，最高权限） | 按指定顺序启用 mixmap | `l4d2_mixmap.sp:131` |
-| `sm_mapinfo` | L4D2 Scoremod+ | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `l4d2_hybrid_scoremod.sp:99` |
-| `sm_mapinfo` | L4D2 Scoremod+ | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `l4d2_hybrid_scoremod_zone.sp:100` |
+| `sm_mapinfo` | L4D2 Scoremod+ | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/l4d2_hybrid_scoremod.sp:99` 注册到 `CmdMapInfo`（:248-267，回调体逐条 `CPrintToChat`）：输出队伍规模、地图距离、总分（含药片上限）、生命加成/伤害加成/药片加成各自上限与占比、平局加分，数据来自 `OnConfigsExecuted`（:119-139）中按 `sm2_bonus_per_survivor_multiplier`×人数×地图距离算出的 `fMapBonus` 等全局量，推测为：显示本张地图 ScoreMod 2 增分配置的说明命令（置信度：高） | `l4d2_hybrid_scoremod.sp:99` |
+| `sm_mapinfo` | L4D2 Scoremod+ | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/l4d2_hybrid_scoremod_zone.sp:100` 注册到 `CmdMapInfo`（:249-268，回调体逐条 `CPrintToChat`）：输出队伍规模、地图距离、总分（含药片上限）、生命加成/伤害加成/药片加成各自上限与占比、平局加分，数据来自 `OnConfigsExecuted`（:120-140）中按 `sm2_bonus_per_survivor_multiplier`×人数×地图距离算出的 `fMapBonus` 等全局量，推测为：显示本张地图 ScoreMod 2 增分配置的说明命令（置信度：高） | `l4d2_hybrid_scoremod_zone.sp:100` |
 | `sm_maplist` | l4d2_mixmap | 无参数 | 无（任意玩家可用） | 显示 mixmap 最终抽取的地图列表 | `l4d2_mixmap.sp:138` |
 | `sm_mapnext` | l4d2_map_vote.sp（myinfo 缺 name，用文件名代替） | 无参数 | 无（任意玩家可用） | 对下一张地图发起投票，终局地图需前置插件支持 | `l4d2_map_vote.sp:142` |
 | `sm_maps` | l4d2_map_vote.sp（myinfo 缺 name，用文件名代替） | 无参数 | 无（任意玩家可用） | 打开地图列表菜单，sm_v3 的别名 | `l4d2_map_vote.sp:136` |
@@ -10052,7 +10052,7 @@ grep -rhoE "Reg[A-Za-z_]*Cmd[A-Za-z_]*\(" --include="*.sp" . extend optional con
 | `sm_web` | simple join | 无参数 | 无（任意玩家可用） | 打开按客户端语言本地化的 MOTD 页面 | `join.sp:133` |
 | `sm_witch` | L4D2 Tank Control | 无参数 | 无（任意玩家可用） | sm_tank 的别名 | `l4d_tank_control_eq.sp:86` |
 | `sm_witch` | [L4D2] Boss Percents/Vote Boss Hybrid | 无参数 | 无（任意玩家可用） | 显示 Witch 刷新百分比 | `l4d_boss_percent.sp:107` |
-| `sm_xx` | text.sp（myinfo 缺 name，用文件名代替） | 无参数 | 无（任意玩家可用） | 源码未说明（回调为空，源码未给描述） | `text.sp:58` |
+| `sm_xx` | text.sp（myinfo 缺 name，用文件名代替） | 无参数 | 无（任意玩家可用） | 源码未给描述；据 `optional/AnneHappy/text.sp:396-400` 回调 `InfectedStatus` 只调用 `printinfo(Client)`，:180-195 的 `printinfo` 再对该玩家调用 `PrintInfoToClient`，后者（:207-280）逐行输出坦克 Bhop 开关（:223-224）、当前武器配置档位（:226-228）、AI 难度、特感上限与刷新间隔（:240）以及刷怪距离/传送检查/回血/坦克消耗等 ConVar（:242-274），推测为：查询本局特感与插件配置状态的玩家命令（`sm_xx` 命名随意，实质等同 `sm_info`；`event_RoundStart` 开局用同一函数全服播报，:401-404）（置信度：高） | `text.sp:58` |
 | `sm_z` | survivor_chat_select.sp（myinfo 缺 name，用文件名代替） | 无参数 | 无（任意玩家可用） | 把自己切换为 Zoey，sm_zoey 的短别名 | `survivor_chat_select.sp:88` |
 | `sm_zd` | Anne Global Chat | <内容> | 无（任意玩家可用） | 发送找队友信息到全服，受每日次数限制 | `global_chat.sp:192` |
 | `sm_zdmenu` | Anne Global Chat | 无参数 | 无（任意玩家可用） | 打开找队友提示接收设置菜单 | `global_chat.sp:197` |
